@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ECF scanner</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1d2a2f">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{--ink:#1d2a2f;--chalk:#f2f4f3;--steel:#5b6b70;--line:#d5dcda;--go:#1fb85a;--hold:#f0a020}
+*{box-sizing:border-box}
+body{margin:0;background:var(--chalk);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:520px;margin:0 auto;padding:10px}
+header{display:flex;justify-content:space-between;align-items:baseline}
+h1{font-size:1.2rem;margin:4px 0 8px}
+#q{font-size:.85rem;color:var(--steel)}#q.bad{color:#c0392b;font-weight:600}
+#cam{position:relative;background:#101719;border-radius:10px;overflow:hidden;aspect-ratio:4/3}
+#cam video,#cam canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#msg{position:absolute;left:0;right:0;bottom:0;padding:6px 12px;background:rgba(16,23,25,.72);color:#fff;font-size:.85rem}
+.row{display:flex;gap:8px;margin:8px 0;flex-wrap:wrap;align-items:center}
+button,select,input[type=text]{font:inherit;min-height:46px;border-radius:8px}
+button{padding:10px 14px;border:0;background:var(--ink);color:#fff}
+button:disabled{background:var(--line);color:var(--steel)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--go);outline-offset:2px}
+select,input[type=text]{width:100%;padding:8px 10px;border:2px solid var(--line);background:#fff}
+.modes button{flex:1;background:#fff;color:var(--ink);border:2px solid var(--ink);padding:8px 2px}
+.modes button.on{background:var(--go);border-color:var(--go);color:#fff;font-weight:600}
+#power{flex:1}#cap{width:100%;font-weight:600}#cap.ready{background:var(--go)}
+.half{flex:1}
+#cur{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px;min-height:64px}
+#cur.hold{border-color:var(--hold)}
+#items{list-style:none;margin:6px 0;padding:0}
+#items li{padding:10px;border:1px solid var(--line);background:#fff;border-radius:8px;margin-bottom:4px}
+#items li.sel{border:2px solid var(--go)}
+#tot{font-weight:600}
+#info{color:var(--steel);font-size:.8rem}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+<header><h1>ECF scanner</h1><span id="q"></span></header>
+<button id="install" hidden style="width:100%;margin-bottom:8px;background:var(--go)">Install app on this phone</button>
+<div id="cam"><video id="v" playsinline muted></video><canvas id="o"></canvas><div id="msg">Camera is off</div></div>
+<div class="row"><button id="power">Enable camera</button><button id="torch" hidden>Torch</button></div>
+<div class="row modes" id="modes"></div>
+<div class="row">
+<select id="auto" class="half" aria-label="Scan mode"><option value="1">Auto scan</option><option value="0" selected>Manual scan</option></select>
+<select id="dup" class="half" aria-label="Repeat rule"><option value="rearm">Repeat after code leaves frame</option><option value="strict" selected>No repeat until new code</option></select>
+</div>
+<button id="cap" disabled>Capture</button>
+<div id="cur" class="row" style="display:block;margin-top:8px">Point the camera at a pack label.</div>
+<div id="sell" hidden>
+<select id="stype" aria-label="Sale type"></select>
+<ul id="items"></ul>
+<div id="tot"></div>
+<div class="row"><button id="price" class="half">Update price</button><button id="rem" class="half">Remove item</button></div>
+<button id="save" style="width:100%;background:var(--go)">Save sale</button>
+</div>
+<div class="row"><input type="text" id="note" placeholder="Note (optional, saved with each scan)" aria-label="Note"></div>
+<p id="info"></p>
+</main>
+<script>
+/* ---- settings: edit these ---- */
+const FORM='https://docs.google.com/forms/d/e/1FAIpQLSdEpl45EOFirI5wj1X3Vfw0JGqn9ILpc6RSSG6zaReMM9nbRA/formResponse';
+const SALE_TYPES=['Market NFM','Market MOT','Market TAK','Shop','Special order','Write off'];
+const MODES=['Pack','Unpack','Freeze','Rescan','Sell'];
+/* ------------------------------ */
+const $=id=>document.getElementById(id);
+const v=$('v'),o=$('o'),ctx=o.getContext('2d'),cv=document.createElement('canvas'),cx=cv.getContext('2d');
+const GO='#1fb85a',HOLD='#f0a020',IDLE=60000,REARM=1500;
+let mode='Pack',items=[],sel=-1,stream,track,running=false,det,zx,ac,lastTick=0,lastActive=0,lastCap='',lastCapSeen=0,seen=null,seenN=0,cand=null,torchOn=false,busy=false;
+let queue=JSON.parse(localStorage.ecfq||'[]'),ctr=+localStorage.ecfc||0;
+const pad=n=>String(n).padStart(2,'0');
+const stamp=(d,h12)=>pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear()+' '+(h12?pad(d.getHours()%12||12):pad(d.getHours()))+':'+pad(d.getMinutes())+':'+pad(d.getSeconds())+(h12?(d.getHours()<12?' AM':' PM'):'');
+const esc=s=>String(s).replace(/[&<>"]/g,c=>'&#'+c.charCodeAt(0)+';');
+const msg=t=>$('msg').textContent=t;
+
+function beep(f,ms){if(!ac)return;const t=ac.currentTime,g=ac.createGain(),s=ac.createOscillator();s.frequency.value=f;s.connect(g);g.connect(ac.destination);g.gain.setValueAtTime(.25,t);g.gain.setValueAtTime(0,t+ms/1e3);s.start(t);s.stop(t+ms/1e3+.02)}
+
+/* Pack barcodes keep the old app layout: "A"+13 digits (PLU, weight/1000, price/100). Any other barcode is stored as read. */
+function okEAN(s){let t=0;for(let i=0;i<12;i++)t+=(+s[i])*(i%2?3:1);return (10-t%10)%10===+s[12]}
+function norm(raw){if(/^\d{13}$/.test(raw)&&okEAN(raw))return 'A'+raw;if(/^\d{12}$/.test(raw)&&okEAN('0'+raw))return 'A0'+raw;return null}
+function makeItem(raw){
+  const n=norm(raw),w=stamp(new Date(),true);
+  if(!n)return{code:raw,plu:'',kg:'',price:'',sell:'',when:w};
+  const price=(+n.slice(8,13)/100).toFixed(2);
+  return{code:n,plu:n.slice(1,4),kg:(+n.slice(4,8)/1000).toFixed(3),price,sell:price,when:w};
+}
+const label=it=>it.plu?'PLU '+it.plu+' · '+it.kg+' kg · $'+it.sell:esc(it.code);
+
+/* ---- upload queue (Google Form) ---- */
+function saveQ(){localStorage.ecfq=JSON.stringify(queue);localStorage.ecfc=ctr;const e=$('q');e.textContent=(navigator.onLine?'':'Offline · ')+(queue.length?'Waiting to send: '+queue.length:'All sent');e.className=queue.length>20?'bad':''}
+function enqueue(list){
+  const t=stamp(new Date(),false),note=$('note').value.trim(),st=mode==='Sell'?$('stype').value:'';
+  for(const it of list){ctr++;queue.push({id:t+it.code+ctr,f:{'entry.829806616':it.when,'entry.798642772':it.code,'entry.1746935441':mode,'entry.581625708':it.sell,'entry.28535428':ctr+';'+note,'entry.1039143216':st}})}
+  saveQ();flush();
+}
+async function flush(){
+  if(busy||!queue.length)return;busy=true;
+  try{
+    const c=new AbortController(),to=setTimeout(()=>c.abort(),15000);
+    await fetch(FORM,{method:'POST',mode:'no-cors',body:new URLSearchParams(queue[0].f),signal:c.signal});
+    clearTimeout(to);queue.shift();saveQ();busy=false;if(queue.length)flush();
+  }catch(e){busy=false}
+}
+setInterval(flush,3000);addEventListener('online',()=>{saveQ();flush()});addEventListener('offline',saveQ);
+
+/* ---- modes and sale list ---- */
+function setMode(m){
+  mode=m;items=[];sel=-1;$('note').value='';lastCap='';
+  [...$('modes').children].forEach(b=>b.classList.toggle('on',b.textContent===m));
+  $('sell').hidden=m!=='Sell';render();
+  $('cur').textContent=m==='Sell'?'Scan items to build the sale.':'Mode: '+m+'. Each scan is saved straight away.';
+}
+function render(){
+  $('items').innerHTML=items.map((it,i)=>'<li data-i="'+i+'"'+(i===sel?' class="sel"':'')+'>'+(i+1)+'. '+label(it)+'</li>').join('');
+  const p=items.reduce((a,it)=>a+(+it.sell||0),0),k=items.reduce((a,it)=>a+(+it.kg||0),0);
+  $('tot').textContent=items.length+' items · '+k.toFixed(2)+' kg · $'+p.toFixed(2);
+}
+$('items').onclick=e=>{const li=e.target.closest('li');if(li){sel=+li.dataset.i;render()}};
+$('price').onclick=()=>{
+  if(sel<0)return;const r=prompt('Enter a new selling price for this item:',items[sel].sell);
+  if(r!==null&&r.trim()!==''&&!isNaN(r)){items[sel].sell=(+r).toFixed(2);render()}
+};
+$('rem').onclick=()=>{if(sel>=0&&confirm('Remove the selected item from the sale?')){items.splice(sel,1);sel=items.length-1;render()}};
+$('save').onclick=()=>{
+  if(!items.length)return alert('No items to save.');
+  if(!$('stype').value)return alert('Pick a sale type first.');
+  if(confirm('Save this sale?')){enqueue(items);items=[];sel=-1;$('note').value='';render();$('cur').textContent='Sale saved.'}
+};
+
+function capture(raw){
+  const it=makeItem(raw);lastCap=raw;lastCapSeen=performance.now();beep(1200,90);navigator.vibrate&&navigator.vibrate(40);
+  $('cur').className='row';$('cur').innerHTML='<b>'+esc(it.code)+'</b><br>'+(it.plu?label(it):'Other barcode')+'<br><small>'+mode+'</small>';
+  if(mode==='Sell'){items.push(it);sel=items.length-1;render()}else enqueue([it]);
+}
+
+/* ---- camera and detection ---- */
+async function loadZX(){
+  if(window.ZXing)return;
+  await new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js';s.onload=ok;s.onerror=no;document.head.appendChild(s)});
+}
+async function initDetector(){
+  if(det||zx)return;
+  if('BarcodeDetector' in window){det=new BarcodeDetector();$('info').textContent='Decoder: built-in browser detector';return}
+  await loadZX();zx=new ZXing.MultiFormatReader();zx.setHints(new Map([[ZXing.DecodeHintType.TRY_HARDER,true]]));
+  $('info').textContent='Decoder: ZXing fallback (slower)';
+}
+async function detect(){
+  if(det){const r=await det.detect(v);return r.map(b=>({raw:b.rawValue,pts:b.cornerPoints.map(p=>[p.x,p.y])}))}
+  const w=640,h=Math.round(w*v.videoHeight/v.videoWidth);cv.width=w;cv.height=h;cx.drawImage(v,0,0,w,h);
+  try{const r=zx.decode(new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.HTMLCanvasElementLuminanceSource(cv)))),k=v.videoWidth/w;
+    return[{raw:r.getText(),pts:r.getResultPoints().map(p=>[p.getX()*k,p.getY()*k])}]}catch(e){return[]}
+}
+function draw(list){
+  o.width=o.clientWidth;o.height=o.clientHeight;ctx.clearRect(0,0,o.width,o.height);
+  const vw=v.videoWidth,vh=v.videoHeight,s=Math.max(o.width/vw,o.height/vh),dx=(o.width-vw*s)/2,dy=(o.height-vh*s)/2;
+  for(const it of list){
+    let p=it.pts.map(([x,y])=>[x*s+dx,y*s+dy]);
+    if(p.length<4){const xs=p.map(a=>a[0]),ys=p.map(a=>a[1]),a=Math.min(...xs)-14,b=Math.min(...ys)-30,c=Math.max(...xs)+14,d=Math.max(...ys)+30;p=[[a,b],[c,b],[c,d],[a,d]]}
+    ctx.beginPath();p.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.lineWidth=6;ctx.lineJoin='round';ctx.strokeStyle=it.color;ctx.stroke();
+  }
+}
+function handle(list,now){
+  const auto=$('auto').value==='1',strict=$('dup').value==='strict';
+  cand=null;let blocked=false;
+  for(const it of list){
+    cand=cand||it.raw;
+    const dup=it.raw===lastCap&&(strict||now-lastCapSeen<REARM);
+    if(it.raw===lastCap)lastCapSeen=now;
+    it.color=(auto&&dup)?HOLD:GO;if(auto&&dup)blocked=true;
+  }
+  if(list.length)lastActive=now;
+  if(cand&&cand===seen)seenN++;else{seen=cand;seenN=cand?1:0}
+  $('cap').disabled=auto||!cand;$('cap').classList.toggle('ready',!auto&&!!cand);
+  $('cap').textContent=auto?'Capture (auto scan is on)':cand?'Capture':'Capture';
+  $('cur').classList.toggle('hold',auto&&blocked);
+  if(auto&&cand&&!blocked&&seenN>=2)capture(cand);
+  draw(list);
+}
+async function tick(){
+  if(!running)return;const now=performance.now();
+  if(now-lastTick>90&&v.readyState>=2){lastTick=now;let l=[];try{l=await detect()}catch(e){}handle(l,now)}
+  const left=IDLE-(now-lastActive);
+  if(left<=0)return stop('Camera paused after 60 s idle. Tap Enable camera.');
+  msg(left<15000?'Camera sleeps in '+Math.ceil(left/1000)+' s':'Camera on · sleeps after 60 s idle');
+  requestAnimationFrame(tick);
+}
+async function start(){
+  ac=ac||new(window.AudioContext||window.webkitAudioContext)();ac.resume();
+  try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false})}
+  catch(e){return msg('Camera unavailable: '+e.name+'. Open this page over HTTPS.')}
+  v.srcObject=stream;await v.play();track=stream.getVideoTracks()[0];
+  $('torch').hidden=!(track.getCapabilities&&track.getCapabilities().torch);
+  msg('Starting decoder…');try{await initDetector()}catch(e){stop('Could not load a barcode decoder.');return}
+  running=true;lastActive=performance.now();$('power').textContent='Stop camera';lock(true);tick();
+}
+function stop(m){
+  running=false;lock(false);if(stream)stream.getTracks().forEach(t=>t.stop());v.srcObject=null;torchOn=false;
+  ctx.clearRect(0,0,o.width,o.height);$('power').textContent='Enable camera';$('cap').disabled=true;msg(m||'Camera is off');
+}
+$('power').onclick=()=>running?stop():start();
+$('torch').onclick=()=>{torchOn=!torchOn;track.applyConstraints({advanced:[{torch:torchOn}]})};
+$('cap').onclick=()=>{if(cand)capture(cand)};
+document.addEventListener('pointerdown',()=>lastActive=performance.now());
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&running)stop('Camera paused while the app is in the background.')});
+
+MODES.forEach(m=>{const b=document.createElement('button');b.textContent=m;b.onclick=()=>setMode(m);$('modes').appendChild(b)});
+$('stype').innerHTML='<option value="">Sale type…</option>'+SALE_TYPES.map(s=>'<option>'+s+'</option>').join('');
+let wl,ip;
+async function lock(on){try{if(on)wl=await navigator.wakeLock.request('screen');else if(wl){wl.release();wl=null}}catch(e){}}
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();ip=e;$('install').hidden=false});
+addEventListener('appinstalled',()=>$('install').hidden=true);
+$('install').onclick=async()=>{ip.prompt();await ip.userChoice;$('install').hidden=true};
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');
+if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
+saveQ();setMode('Pack');
+</script>
+</body>
+</html>
