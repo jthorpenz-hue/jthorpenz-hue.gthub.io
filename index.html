@@ -43,11 +43,12 @@ select,input[type=text]{width:100%;padding:8px 10px;border:2px solid var(--line)
 <main>
 <header><h1>ECF scanner</h1><span id="q"></span></header>
 <button id="install" hidden style="width:100%;margin-bottom:8px;background:var(--go)">Install app on this phone</button>
+<button id="upd" hidden style="width:100%;margin-bottom:8px;background:var(--hold);color:var(--ink)">New version ready: tap to reload</button>
 <div class="row"><select id="src" aria-label="Input source"><option value="cam">Input: phone camera</option><option value="bt">Input: handheld Bluetooth scanner</option></select></div>
 <div id="cam" class="camonly"><video id="v" playsinline muted></video><canvas id="o"></canvas><div id="msg">Camera is off</div></div>
 <div class="row camonly"><button id="power">Enable camera</button><button id="torch" hidden>Torch</button></div>
 <div class="row modes" id="modes"></div>
-<div id="btui" hidden><label for="scan" style="font-size:.85rem;color:var(--steel)">Handheld scanner: pull the trigger to scan</label><input type="text" id="scan" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Waiting for scanner…"></div>
+<div id="btui" hidden><label for="scan" style="font-size:.85rem;color:var(--steel)">Handheld scanner: pull the trigger to scan</label><input type="text" id="scan" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Waiting for scanner…"><div id="dbg" style="font-size:.75rem;color:var(--steel)">Scanner readout: waiting for a key</div></div>
 <div class="row camonly">
 <select id="auto" class="half" aria-label="Scan mode"><option value="1">Auto scan</option><option value="0" selected>Manual scan</option></select>
 <select id="dup" class="half" aria-label="Repeat rule"><option value="rearm">Repeat after code leaves frame</option><option value="strict" selected>No repeat until new code</option></select>
@@ -63,12 +64,14 @@ select,input[type=text]{width:100%;padding:8px 10px;border:2px solid var(--line)
 </div>
 <div class="row"><input type="text" id="note" placeholder="Note (optional, saved with each scan)" aria-label="Note"></div>
 <p id="info"></p>
+<p id="ver" style="color:var(--steel);font-size:.75rem"></p>
 </main>
 <script>
 /* ---- settings: edit these ---- */
 const FORM='https://docs.google.com/forms/d/e/1FAIpQLSdEpl45EOFirI5wj1X3Vfw0JGqn9ILpc6RSSG6zaReMM9nbRA/formResponse';
 const SALE_TYPES=['Market NFM','Market MOT','Market TAK','Shop','Special order','Write off'];
 const MODES=['Pack','Unpack','Freeze','Rescan','Sell'];
+const BUILD='v7';   // keep in step with V in sw.js
 /* ------------------------------ */
 const $=id=>document.getElementById(id);
 const v=$('v'),o=$('o'),ctx=o.getContext('2d'),cv=document.createElement('canvas'),cx=cv.getContext('2d');
@@ -218,7 +221,10 @@ async function lock(on){try{if(on)wl=await navigator.wakeLock.request('screen');
 addEventListener('beforeinstallprompt',e=>{e.preventDefault();ip=e;$('install').hidden=false});
 addEventListener('appinstalled',()=>$('install').hidden=true);
 $('install').onclick=async()=>{ip.prompt();await ip.userChoice;$('install').hidden=true};
-if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');
+if('serviceWorker' in navigator){const had=!!navigator.serviceWorker.controller;navigator.serviceWorker.register('sw.js');
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(had)$('upd').hidden=false})}
+$('upd').onclick=()=>location.reload();
+$('ver').textContent='Build '+BUILD;
 if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
 /* ---- handheld Bluetooth scanner (keyboard mode) ---- */
 let src='cam',scanTimer;const si=$('scan');
@@ -252,6 +258,7 @@ let kb='',kt=-1e9;
 addEventListener('keydown',e=>{
   if(src!=='bt'||e.isComposing)return;
   const now=performance.now();
+  $('dbg').textContent='Scanner readout: key '+e.key+' · burst '+kb.length+' chars · gap '+Math.round(now-kt)+' ms';
   if(e.key==='Enter'){
     const b=kb;kb='';
     if(/^\d{8,}$/.test(b)){
@@ -262,7 +269,7 @@ addEventListener('keydown',e=>{
     }
     return;
   }
-  if(e.key.length===1){kb=(now-kt<120?kb:'')+e.key;kt=now}
+  if(e.key.length===1){kb=(now-kt<250?kb:'')+e.key;kt=now}
   else if(!['Shift','CapsLock','Alt','Control','Meta','AltGraph'].includes(e.key))kb='';
 },true);
 function setSrc(s){
