@@ -30,7 +30,7 @@ select,input[type=text]{width:100%;padding:8px 10px;border:2px solid var(--line)
 #power{flex:1}#cap{width:100%;font-weight:600}#cap.ready{background:var(--go)}
 .half{flex:1}
 #cur{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px;min-height:64px}
-#cur.hold{border-color:var(--hold)}
+#cur.hold{border-color:var(--hold)}#cur.bad{border-color:#e5484d}
 #items{list-style:none;margin:6px 0;padding:0}
 #items li{padding:10px;border:1px solid var(--line);background:#fff;border-radius:8px;margin-bottom:4px}
 #items li.sel{border:2px solid var(--go)}
@@ -43,14 +43,16 @@ select,input[type=text]{width:100%;padding:8px 10px;border:2px solid var(--line)
 <main>
 <header><h1>ECF scanner</h1><span id="q"></span></header>
 <button id="install" hidden style="width:100%;margin-bottom:8px;background:var(--go)">Install app on this phone</button>
-<div id="cam"><video id="v" playsinline muted></video><canvas id="o"></canvas><div id="msg">Camera is off</div></div>
-<div class="row"><button id="power">Enable camera</button><button id="torch" hidden>Torch</button></div>
+<div class="row"><select id="src" aria-label="Input source"><option value="cam">Input: phone camera</option><option value="bt">Input: handheld Bluetooth scanner</option></select></div>
+<div id="cam" class="camonly"><video id="v" playsinline muted></video><canvas id="o"></canvas><div id="msg">Camera is off</div></div>
+<div class="row camonly"><button id="power">Enable camera</button><button id="torch" hidden>Torch</button></div>
 <div class="row modes" id="modes"></div>
-<div class="row">
+<div id="btui" hidden><label for="scan" style="font-size:.85rem;color:var(--steel)">Handheld scanner: pull the trigger to scan</label><input type="text" id="scan" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Waiting for scanner…"></div>
+<div class="row camonly">
 <select id="auto" class="half" aria-label="Scan mode"><option value="1">Auto scan</option><option value="0" selected>Manual scan</option></select>
 <select id="dup" class="half" aria-label="Repeat rule"><option value="rearm">Repeat after code leaves frame</option><option value="strict" selected>No repeat until new code</option></select>
 </div>
-<button id="cap" disabled>Capture</button>
+<button id="cap" class="camonly" disabled>Capture</button>
 <div id="cur" class="row" style="display:block;margin-top:8px">Point the camera at a pack label.</div>
 <div id="sell" hidden>
 <select id="stype" aria-label="Sale type"></select>
@@ -78,13 +80,14 @@ const stamp=(d,h12)=>pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear(
 const esc=s=>String(s).replace(/[&<>"]/g,c=>'&#'+c.charCodeAt(0)+';');
 const msg=t=>$('msg').textContent=t;
 
-function beep(f,ms){if(!ac)return;const t=ac.currentTime,g=ac.createGain(),s=ac.createOscillator();s.frequency.value=f;s.connect(g);g.connect(ac.destination);g.gain.setValueAtTime(.25,t);g.gain.setValueAtTime(0,t+ms/1e3);s.start(t);s.stop(t+ms/1e3+.02)}
+function audio(){ac=ac||new(window.AudioContext||window.webkitAudioContext)();ac.resume()}
+function beep(f,ms){audio();if(!ac)return;const t=ac.currentTime,g=ac.createGain(),s=ac.createOscillator();s.frequency.value=f;s.connect(g);g.connect(ac.destination);g.gain.setValueAtTime(.25,t);g.gain.setValueAtTime(0,t+ms/1e3);s.start(t);s.stop(t+ms/1e3+.02)}
 
 /* Pack barcodes keep the old app layout: "A"+13 digits (PLU, weight/1000, price/100). Any other barcode is stored as read. */
 function okEAN(s){let t=0;for(let i=0;i<12;i++)t+=(+s[i])*(i%2?3:1);return (10-t%10)%10===+s[12]}
 function norm(raw){if(/^\d{13}$/.test(raw)&&okEAN(raw))return 'A'+raw;if(/^\d{12}$/.test(raw)&&okEAN('0'+raw))return 'A0'+raw;return null}
-function makeItem(raw){
-  const n=norm(raw),w=stamp(new Date(),true);
+function makeItem(raw,nn){
+  const n=nn||norm(raw),w=stamp(new Date(),true);
   if(!n)return{code:raw,plu:'',kg:'',price:'',sell:'',when:w};
   const price=(+n.slice(8,13)/100).toFixed(2);
   return{code:n,plu:n.slice(1,4),kg:(+n.slice(4,8)/1000).toFixed(3),price,sell:price,when:w};
@@ -132,8 +135,8 @@ $('save').onclick=()=>{
   if(confirm('Save this sale?')){enqueue(items);items=[];sel=-1;$('note').value='';render();$('cur').textContent='Sale saved.'}
 };
 
-function capture(raw){
-  const it=makeItem(raw);lastCap=raw;lastCapSeen=performance.now();beep(1200,90);navigator.vibrate&&navigator.vibrate(40);
+function capture(raw,nn){
+  const it=makeItem(raw,nn);lastCap=raw;lastCapSeen=performance.now();beep(1200,90);navigator.vibrate&&navigator.vibrate(40);
   $('cur').className='row';$('cur').innerHTML='<b>'+esc(it.code)+'</b><br>'+(it.plu?label(it):'Other barcode')+'<br><small>'+mode+'</small>';
   if(mode==='Sell'){items.push(it);sel=items.length-1;render()}else enqueue([it]);
 }
@@ -217,7 +220,70 @@ addEventListener('appinstalled',()=>$('install').hidden=true);
 $('install').onclick=async()=>{ip.prompt();await ip.userChoice;$('install').hidden=true};
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');
 if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
-saveQ();setMode('Pack');
+/* ---- handheld Bluetooth scanner (keyboard mode) ---- */
+let src='cam',scanTimer;const si=$('scan');
+/* Scanner rule: exactly 13 digits followed by the terminator (carriage return). Anything else is a read error.
+   Stored as "A"+the 13 digits, as in the App Inventor app. */
+function checkScanner(raw){return /^\d{13}\r$/.test(raw)?'A'+raw.slice(0,13):null}
+function scanBad(t){
+  beep(220,140);setTimeout(()=>beep(220,140),220);navigator.vibrate&&navigator.vibrate([80,60,80]);
+  $('cur').className='row bad';$('cur').innerHTML='Not a valid pack barcode:<br><b>'+esc(t||'(empty)')+'</b>';
+}
+function scanDone(raw){const n=checkScanner(raw);if(n)capture(raw.slice(0,-1),n);else scanBad(raw.slice(0,-1))}
+let lastUi=Date.now();
+['pointerdown','keydown','input'].forEach(t=>addEventListener(t,()=>lastUi=Date.now(),true));
+/* Give focus back to the scanner box unless the user is actively using a dropdown (10 s) or the note box (30 s). */
+function focusScan(){
+  if(src!=='bt')return;
+  const a=document.activeElement,tag=a&&a!==si?a.tagName:'',idle=Date.now()-lastUi;
+  if((tag==='SELECT'&&idle<10000)||((tag==='INPUT'||tag==='TEXTAREA')&&idle<30000))return;
+  si.focus({preventScroll:true});
+}
+si.addEventListener('keydown',e=>{
+  if(e.key==='Enter'){e.preventDefault();clearTimeout(scanTimer);const t=si.value;si.value='';scanDone(t+'\r')}
+});
+si.addEventListener('input',()=>{            // characters arrived but no terminator: incomplete read, discard it
+  clearTimeout(scanTimer);scanTimer=setTimeout(()=>{const t=si.value;si.value='';if(t)scanBad(t)},700);
+});
+/* Catch a scan wherever the focus is (note box, a list, anywhere): a fast burst of digits followed by Enter.
+   Exactly 13 digits is a scan; any other barcode-length burst (8+ digits) is a read error. Either way the digits are
+   removed from the field that received them and handled as scanner input. Slow or short typing is left alone. */
+let kb='',kt=-1e9;
+addEventListener('keydown',e=>{
+  if(src!=='bt'||e.isComposing)return;
+  const now=performance.now();
+  if(e.key==='Enter'){
+    const b=kb;kb='';
+    if(/^\d{8,}$/.test(b)){
+      e.preventDefault();e.stopImmediatePropagation();
+      const a=document.activeElement;
+      if(a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA')&&a.value.endsWith(b))a.value=a.value.slice(0,-b.length);
+      clearTimeout(scanTimer);scanDone(b+'\r');
+    }
+    return;
+  }
+  if(e.key.length===1){kb=(now-kt<120?kb:'')+e.key;kt=now}
+  else if(!['Shift','CapsLock','Alt','Control','Meta','AltGraph'].includes(e.key))kb='';
+},true);
+function setSrc(s){
+  src=s;localStorage.ecfsrc=s;$('src').value=s;
+  if(s==='bt'&&running)stop();
+  document.querySelectorAll('.camonly').forEach(e=>e.hidden=s!=='cam');
+  $('btui').hidden=s!=='bt';si.value='';
+  if(s==='bt'){$('cur').className='row';$('cur').textContent='Scanner mode: pull the trigger to scan. Mode: '+mode+'.';focusScan()}else si.blur();
+}
+$('src').onchange=e=>setSrc(e.target.value);
+addEventListener('change',e=>{if(e.target.tagName==='SELECT'){e.target.blur();setTimeout(focusScan,50)}});   // after choosing from any list
+$('note').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('note').blur();setTimeout(focusScan,50)}});   // Enter/Done in the note box
+document.addEventListener('pointerdown',e=>{   // tapping anywhere that is not a field
+  if(src==='bt'&&!e.target.closest('input,select,textarea,label')){
+    const a=document.activeElement;if(a&&a!==si&&/^(SELECT|INPUT|TEXTAREA)$/.test(a.tagName))a.blur();setTimeout(focusScan,50)}
+});
+setInterval(focusScan,1000);
+addEventListener('focusout',()=>setTimeout(focusScan,150));
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)focusScan()});
+document.addEventListener('keydown',()=>{if(src==='bt')audio()});
+saveQ();setMode('Pack');setSrc(localStorage.ecfsrc==='bt'?'bt':'cam');
 </script>
 </body>
 </html>
