@@ -47,7 +47,7 @@ select{padding:6px 8px;border:2px solid var(--line);background:var(--card);color
 .cmp .lbl{width:auto;font:600 .7rem/1 system-ui,sans-serif;color:var(--steel);text-align:left;padding:8px 6px 0 0}
 #verdict{font-weight:700;padding:3px 10px;border-radius:99px;font-size:.85rem}
 #verdict.ok{background:var(--goBg);color:var(--go)}#verdict.bad{background:var(--badBg);color:var(--bad)}#verdict.warn{background:var(--warnBg);color:var(--warn)}
-#crop{display:block;max-width:100%;image-rendering:pixelated;border:1px solid var(--line);background:#fff;margin-top:6px}
+.strip{display:block;max-width:100%;border:1px solid var(--line);background:#fff;margin-top:4px}
 .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
 .stat{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:7px 8px;min-width:0}
 .stat b{display:block;font:700 1.15rem/1.1 var(--mono);font-variant-numeric:tabular-nums}
@@ -92,8 +92,11 @@ input[type=range]{width:100%;accent-color:var(--go)}
     <span><i style="outline:1.5px dashed var(--steel);outline-offset:-2px"></i>missed</span>
     <span><i style="background:var(--warn)"></i>extra</span>
   </div>
-  <div class="sub" style="margin-top:8px">What the OCR saw <span id="conf"></span></div>
-  <canvas id="crop" width="10" height="10"></canvas>
+  <div class="sub" style="margin-top:8px">Camera strip</div>
+  <canvas id="raw" class="strip" width="10" height="10"></canvas>
+  <div class="sub" style="margin-top:6px">What the OCR saw <span id="conf"></span></div>
+  <canvas id="crop" class="strip" width="10" height="10"></canvas>
+  <div class="sub" id="cropInfo"></div>
 </section>
 
 <section>
@@ -154,7 +157,7 @@ const F=document.createElement('canvas'),fctx=F.getContext('2d',{willReadFrequen
 const Z=document.createElement('canvas'),zctx=Z.getContext('2d',{willReadFrequently:true});   // downscaled copy for ZXing
 const crop=$('crop'),cctx=crop.getContext('2d',{willReadFrequently:true});
 const T=document.createElement('canvas'),tctx=T.getContext('2d');                           // un-thresholded crop
-let det=null,zx=null,worker=null,stream=null,track=null,running=false,frozen=false,photoMode=false,ocrBusy=false,detBusy=false,lastDet=0,lastHit=null,torchOn=false,wl=null;
+let cropInfo='',det=null,zx=null,worker=null,stream=null,track=null,running=false,frozen=false,photoMode=false,ocrBusy=false,detBusy=false,lastDet=0,lastHit=null,torchOn=false,wl=null;
 const msg=t=>$('msg').textContent=t;
 const status=t=>$('status').textContent=t;
 
@@ -205,19 +208,27 @@ function edges(img,B,y,x0,x1){
 }
 /* Turn a detection into a box: origin at the top-left of the bars, u along the bars, v down the bars, w = width, h = bar height. */
 function boxOf(hit){
-  const p=hit.pts;
-  if(p.length>=4){
-    const[tl,tr,br,bl]=p,u=nrm(sub(tr,tl)),vv=[-u[1],u[0]];
-    const w=(len(sub(tr,tl))+len(sub(br,bl)))/2,h=(dot(sub(bl,tl),vv)+dot(sub(br,tr),vv))/2;
-    return h>0?{o:tl,u,v:vv,w,h}:{o:bl,u,v:vv,w,h:-h};
-  }
-  // ZXing gives only the two ends of the line it read; find the top and bottom of the bars by scanning up and down.
-  let a=p[0],b=p[p.length-1];if(b[0]<a[0])[a,b]=[b,a];
-  const u=nrm(sub(b,a)),vv=[-u[1],u[0]],w=len(sub(b,a)),B={o:a,u,v:vv,w,h:0};
-  const R=Math.ceil(w*1.3),cx=Math.round((a[0]+b[0])/2),cy=Math.round((a[1]+b[1])/2);
+  // Readers report the barcode differently (Android's built-in reader often gives a thin line, ZXing gives a level line),
+  // so take only a line through the bars from the reader and measure the bars themselves from the image.
+  const p=hit.pts;let a,b;
+  if(p.length>=4){const[tl,tr,br,bl]=p;a=[(tl[0]+bl[0])/2,(tl[1]+bl[1])/2];b=[(tr[0]+br[0])/2,(tr[1]+br[1])/2]}
+  else{a=p[0];b=p[p.length-1];if(b[0]<a[0])[a,b]=[b,a]}
+  let u=nrm(sub(b,a)),vv=[-u[1],u[0]],w=len(sub(b,a));if(w<20)return null;
+  const R=Math.ceil(w*1.4),cx=Math.round((a[0]+b[0])/2),cy=Math.round((a[1]+b[1])/2);
   const ox=Math.max(0,cx-R),oy=Math.max(0,cy-R),iw=Math.min(F.width,cx+R)-ox,ih=Math.min(F.height,cy+R)-oy;
   if(iw<4||ih<4)return null;
   const id=fctx.getImageData(ox,oy,iw,ih),img={d:id.data,w:iw,h:ih,ox,oy};
+  // Find the true left and right ends of the bars along the line (the reader's ends can include margins or miss the guard bars).
+  {const n=Math.min(900,Math.round(w*1.3)),xs=-w*.08,xe=w*1.08,g=[],Bt={o:a,u,v:vv};let mean=0;
+   for(let i=0;i<n;i++){const q=at(Bt,xs+(xe-xs)*i/(n-1),0),px=Math.round(q[0])-ox,py=Math.round(q[1])-oy;let val=255;
+     if(px>=0&&py>=0&&px<iw&&py<ih){const j=(py*iw+px)*4;val=.3*img.d[j]+.59*img.d[j+1]+.11*img.d[j+2]}g.push(val);mean+=val}
+   mean/=n;const dark=g.map(x=>x<mean*.75);
+   // ends = outermost dark pixels that have other dark pixels close by (ignores specks in the margin)
+   const near=i=>{let c=0;for(let k=Math.max(0,i-8);k<Math.min(n,i+9);k++)c+=dark[k];return c>=3};
+   let L=-1,Rr=-1;for(let i=0;i<n;i++)if(dark[i]&&near(i)){L=i;break}for(let i=n-1;i>=0;i--)if(dark[i]&&near(i)){Rr=i;break}
+   if(L>=0&&Rr>L+20){const xL=xs+(xe-xs)*L/(n-1),xR=xs+(xe-xs)*Rr/(n-1),na=at(Bt,xL,0),nb=at(Bt,xR,0);
+     if(xR-xL>w*.7){a=na;b=nb;w=len(sub(b,a))}}}
+  const B={o:a,u,v:vv,w,h:0};
   const step=Math.max(1,w/300);
   const walk=(Bx,dir,x0,x1)=>{const lim=edges(img,Bx,0,x0,x1)*.55;let y=0,miss=0,last=0;
     while(Math.abs(y)<w*1.1){y+=dir*step;if(edges(img,Bx,y,x0,x1)<lim){if(++miss>=3)break}else{miss=0;last=y}}return last};
@@ -246,18 +257,37 @@ async function applyParams(){await worker.setParameters({tessedit_pageseg_mode:'
 function makeCrop(B){
   const r=ocrRect(B),rw=r.x1-r.x0,rh=r.y1-r.y0;if(rw<=0||rh<=0)return false;
   const s=Math.min(70/rh,1600/rw),W=Math.round(rw*s),H=Math.round(rh*s),pad=14;
-  T.width=W;T.height=H;tctx.imageSmoothingQuality='high';
-  tctx.setTransform(s*B.u[0],s*B.v[0],s*B.u[1],s*B.v[1],s*(-dot(B.u,B.o)-r.x0),s*(-dot(B.v,B.o)-r.y0));
-  tctx.fillStyle='#fff';tctx.fillRect(-1e5,-1e5,2e5,2e5);tctx.drawImage(F,0,0);tctx.setTransform(1,0,0,1,0,0);
-  crop.width=W+2*pad;crop.height=H+2*pad;cctx.fillStyle='#fff';cctx.fillRect(0,0,crop.width,crop.height);cctx.drawImage(T,pad,pad);
-  const id=cctx.getImageData(0,0,crop.width,crop.height),d=id.data,hist=new Array(256).fill(0),N=d.length/4;
-  for(let i=0;i<d.length;i+=4){const g=Math.round(.3*d[i]+.59*d[i+1]+.11*d[i+2]);d[i]=d[i+1]=d[i+2]=g;hist[g]++}
-  if(S.bin==='1'){   // Otsu threshold
-    let sum=0;for(let i=0;i<256;i++)sum+=i*hist[i];let sB=0,wB=0,best=0,th=128;
-    for(let t=0;t<256;t++){wB+=hist[t];if(!wB)continue;const wF=N-wB;if(!wF)break;sB+=t*hist[t];const mB=sB/wB,mF=(sum-sB)/wF,b=wB*wF*(mB-mF)**2;if(b>best){best=b;th=t}}
-    for(let i=0;i<d.length;i+=4){const g=d[i]>th?255:0;d[i]=d[i+1]=d[i+2]=g}
+  // Copy the strip pixel by pixel from the frame (no canvas transforms: some phone browsers draw those black).
+  const cs=[at(B,r.x0,r.y0),at(B,r.x1,r.y0),at(B,r.x1,r.y1),at(B,r.x0,r.y1)];
+  const ox=Math.max(0,Math.floor(Math.min(...cs.map(c=>c[0])))-2),oy=Math.max(0,Math.floor(Math.min(...cs.map(c=>c[1])))-2);
+  const ex=Math.min(F.width,Math.ceil(Math.max(...cs.map(c=>c[0])))+2),ey=Math.min(F.height,Math.ceil(Math.max(...cs.map(c=>c[1])))+2);
+  const sw=ex-ox,sh=ey-oy;if(sw<2||sh<2)return false;
+  const src=fctx.getImageData(ox,oy,sw,sh).data,gray=new Float32Array(W*H);
+  const G=(x,y)=>{const j=(y*sw+x)*4;return .3*src[j]+.59*src[j+1]+.11*src[j+2]};
+  for(let yy=0;yy<H;yy++)for(let xx=0;xx<W;xx++){
+    const P=at(B,r.x0+(xx+.5)/s,r.y0+(yy+.5)/s),fx=P[0]-ox-.5,fy=P[1]-oy-.5,x0=Math.floor(fx),y0=Math.floor(fy);
+    let g=255;
+    if(x0>=0&&y0>=0&&x0+1<sw&&y0+1<sh){const ax=fx-x0,ay=fy-y0;
+      g=(G(x0,y0)*(1-ax)+G(x0+1,y0)*ax)*(1-ay)+(G(x0,y0+1)*(1-ax)+G(x0+1,y0+1)*ax)*ay}
+    gray[yy*W+xx]=g;
   }
-  cctx.putImageData(id,0,0);return true;
+  // Raw view (what the camera gave) for checking
+  const raw=$('raw');raw.width=W;raw.height=H;const rctx=raw.getContext('2d'),rid=rctx.createImageData(W,H);
+  for(let i=0;i<W*H;i++){const g=gray[i];rid.data[i*4]=rid.data[i*4+1]=rid.data[i*4+2]=g;rid.data[i*4+3]=255}rctx.putImageData(rid,0,0);
+  // Stretch contrast, then optionally black-and-white (Otsu); make sure the background ends up white.
+  let lo=255,hi=0;for(const g of gray){if(g<lo)lo=g;if(g>hi)hi=g}const span=Math.max(1,hi-lo);
+  const hist=new Array(256).fill(0),v8=new Uint8ClampedArray(W*H);
+  for(let i=0;i<W*H;i++){const g=Math.round((gray[i]-lo)*255/span);v8[i]=g;hist[g]++}
+  let th=-1;
+  if(S.bin==='1'){const N=W*H;let sum=0;for(let i=0;i<256;i++)sum+=i*hist[i];let sB=0,wB=0,best=0;th=128;
+    for(let t=0;t<256;t++){wB+=hist[t];if(!wB)continue;const wF=N-wB;if(!wF)break;sB+=t*hist[t];const mB=sB/wB,mF=(sum-sB)/wF,b=wB*wF*(mB-mF)**2;if(b>best){best=b;th=t}}}
+  let darkN=0;for(let i=0;i<W*H;i++){if(th>=0)v8[i]=v8[i]>th?255:0;if(v8[i]<128)darkN++}
+  const invert=darkN>W*H*.6;   // mostly dark means light text on dark (or a bad crop): flip so the OCR gets dark text on white
+  crop.width=W+2*pad;crop.height=H+2*pad;const id=cctx.createImageData(crop.width,crop.height),d=id.data;d.fill(255);
+  for(let yy=0;yy<H;yy++)for(let xx=0;xx<W;xx++){const g=invert?255-v8[yy*W+xx]:v8[yy*W+xx],j=((yy+pad)*crop.width+xx+pad)*4;d[j]=d[j+1]=d[j+2]=g}
+  cctx.putImageData(id,0,0);
+  cropInfo='strip '+W+'×'+H+' px, camera grey '+Math.round(lo)+'–'+Math.round(hi)+(invert?', inverted':'');
+  return true;
 }
 async function runOCR(hit,B){
   if(!worker||ocrBusy||!makeCrop(B))return;
@@ -303,7 +333,7 @@ function renderStats(){
 function show(code,txt,conf,count){
   const ops=align(code,txt),nS=ops.filter(o=>o.t==='s').length,nD=ops.filter(o=>o.t==='d').length,nI=ops.filter(o=>o.t==='i').length;
   $('bc').textContent=code;$('ocrTxt').textContent=txt||'(nothing read)';$('cmp').innerHTML=grid(ops);
-  $('conf').textContent=conf>0?'· confidence '+Math.round(conf)+'%':'';
+  $('conf').textContent=conf>0?'· confidence '+Math.round(conf)+'%':'';$('cropInfo').textContent=cropInfo;
   const vd=$('verdict');
   if(!nS&&!nD&&!nI){vd.textContent='Match';vd.className='ok'}
   else if(nS){vd.textContent=nS+' misread'+(nS>1?'s':'');vd.className='bad'}
@@ -349,7 +379,7 @@ async function tick(){
     let hits=[];try{hits=await detect()}catch(e){}
     const hit=hits[0]||null,B=hit?boxOf(hit):null;
     draw(hit,B);
-    if(hit&&B){lastHit={hit,B};msg(hit.fmt+' found · '+(ocrBusy?'reading text…':'ready'));if(!ocrBusy)runOCR(hit,B)}
+    if(hit&&B){lastHit={hit,B};msg(hit.fmt+' · bars '+Math.round(B.w)+'×'+Math.round(B.h)+' px'+(B.h<B.w*.08?' · bar height not found, hold steadier':'')+' · '+(ocrBusy?'reading…':'ready'));if(!ocrBusy)runOCR(hit,B)}
     else msg('Point the camera at a barcode label');
     detBusy=false;
   }
@@ -380,7 +410,7 @@ $('copy').onclick=async()=>{
   let acc=0,bad=0;labels.forEach(L=>{if(L.accepted!==null){acc++;if(L.accepted!==L.code)bad++}});
   const t='ECF OCR check '+new Date().toLocaleString()+'\nReads '+st.reads+', exact '+st.exact+', with misread digit '+st.sub+', missing/extra only '+st.len+
     '\nDigits correct '+st.charsOK+'/'+st.chars+'\nLabels '+labels.size+', accepted after '+CONSENSUS+' agreeing reads '+acc+', accepted but wrong '+bad+
-    '\nSettings '+JSON.stringify(S)+'\n'+$('info').textContent;
+    '\nSettings '+JSON.stringify(S)+'\nLast '+cropInfo+'\n'+$('info').textContent+'\n'+navigator.userAgent;
   try{await navigator.clipboard.writeText(t);$('copy').textContent='Copied'}catch(e){$('copy').textContent='Copy failed'}
   setTimeout(()=>$('copy').textContent='Copy summary',1500);
 };
@@ -395,7 +425,7 @@ $('photo').onchange=async e=>{
   try{await initDetector()}catch(e){return msg('Could not load the barcode reader.')}
   const hits=await detect().catch(()=>[]);
   if(!hits.length){draw(null);lastHit=null;return msg('No barcode found in this photo')}
-  const hit=hits[0],B=boxOf(hit);lastHit={hit,B};draw(hit,B);msg(hit.fmt+' found in photo · move the sliders to re-test');
+  const hit=hits[0],B=boxOf(hit);if(!B){draw(null);return msg('Barcode found but too small, move closer')}lastHit={hit,B};draw(hit,B);msg(hit.fmt+' · bars '+Math.round(B.w)+'×'+Math.round(B.h)+' px · move the sliders to re-test');
   await waitOCR();runOCR(hit,B);
 };
 async function waitOCR(){while(!worker)await new Promise(r=>setTimeout(r,200))}
