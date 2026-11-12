@@ -68,7 +68,7 @@ input[type=range]{width:100%;accent-color:var(--go)}
 </head>
 <body>
 <main>
-<header><h1>ECF OCR check</h1><div id="status">Loading…</div></header>
+<header><h1>ECF OCR check <span id="build" style="font:600 .8rem var(--mono);color:var(--steel)"></span></h1><div id="status">Loading…</div></header>
 
 <div id="cam"><video id="v" playsinline muted></video><canvas id="still"></canvas><canvas id="ov"></canvas><div id="msg">Camera is off</div></div>
 <div class="row">
@@ -150,6 +150,7 @@ const LIB={
   core:'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1',
   lang:'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int'
 };
+const BUILD='v3';   // change this every time the page is updated
 const CONSENSUS=3, LOGMAX=25;
 const $=id=>document.getElementById(id);
 const v=$('v'),ov=$('ov'),octx=ov.getContext('2d'),still=$('still'),sctx=still.getContext('2d');
@@ -408,7 +409,7 @@ $('freeze').onclick=()=>{frozen=!frozen;$('freeze').textContent=frozen?'Resume':
 $('reset').onclick=resetStats;
 $('copy').onclick=async()=>{
   let acc=0,bad=0;labels.forEach(L=>{if(L.accepted!==null){acc++;if(L.accepted!==L.code)bad++}});
-  const t='ECF OCR check '+new Date().toLocaleString()+'\nReads '+st.reads+', exact '+st.exact+', with misread digit '+st.sub+', missing/extra only '+st.len+
+  const t='ECF OCR check '+BUILD+' · '+new Date().toLocaleString()+'\nReads '+st.reads+', exact '+st.exact+', with misread digit '+st.sub+', missing/extra only '+st.len+
     '\nDigits correct '+st.charsOK+'/'+st.chars+'\nLabels '+labels.size+', accepted after '+CONSENSUS+' agreeing reads '+acc+', accepted but wrong '+bad+
     '\nSettings '+JSON.stringify(S)+'\nLast '+cropInfo+'\n'+$('info').textContent+'\n'+navigator.userAgent;
   try{await navigator.clipboard.writeText(t);$('copy').textContent='Copied'}catch(e){$('copy').textContent='Copy failed'}
@@ -440,6 +441,7 @@ function rerunStill(){   // re-test the photo or frozen frame without counting i
 addEventListener('resize',()=>lastHit&&(photoMode||frozen)&&draw(lastHit.hit,lastHit.B));
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&running)stop()});
 
+$('build').textContent=BUILD;document.title='ECF OCR check '+BUILD;
 resetStats();
 initOCR().catch(e=>status('OCR failed to load: '+e.message));
 </script>
