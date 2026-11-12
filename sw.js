@@ -1,5 +1,5 @@
 // Bump V whenever index.html changes so phones pick up the new version.
-const V='ecf-v7',SHELL=['./','index.html','manifest.webmanifest','icon-192.png','icon-512.png'];
+const V='ecf-v10',SHELL=['./','index.html','manifest.webmanifest','icon-192.png','icon-512.png'];
 const good=res=>res&&(res.ok||res.type==='opaque');   // never cache an error page (e.g. a 404 after the site is unpublished)
 // Install fetches every file fresh (cache:'reload'), never from the browser's HTTP cache.
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>Promise.all(SHELL.map(u=>c.add(new Request(u,{cache:'reload'}))))).then(()=>self.skipWaiting()))});

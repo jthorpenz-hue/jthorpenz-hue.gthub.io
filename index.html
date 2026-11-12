@@ -71,7 +71,7 @@ select,input[type=text]{width:100%;padding:8px 10px;border:2px solid var(--line)
 const FORM='https://docs.google.com/forms/d/e/1FAIpQLSdEpl45EOFirI5wj1X3Vfw0JGqn9ILpc6RSSG6zaReMM9nbRA/formResponse';
 const SALE_TYPES=['Market NFM','Market MOT','Market TAK','Shop','Special order','Write off'];
 const MODES=['Pack','Unpack','Freeze','Rescan','Sell'];
-const BUILD='v7';   // keep in step with V in sw.js
+const BUILD='v10';   // keep in step with V in sw.js
 /* ------------------------------ */
 const $=id=>document.getElementById(id);
 const v=$('v'),o=$('o'),ctx=o.getContext('2d'),cv=document.createElement('canvas'),cx=cv.getContext('2d');
@@ -88,7 +88,10 @@ function beep(f,ms){audio();if(!ac)return;const t=ac.currentTime,g=ac.createGain
 
 /* Pack barcodes keep the old app layout: "A"+13 digits (PLU, weight/1000, price/100). Any other barcode is stored as read. */
 function okEAN(s){let t=0;for(let i=0;i<12;i++)t+=(+s[i])*(i%2?3:1);return (10-t%10)%10===+s[12]}
-function norm(raw){if(/^\d{13}$/.test(raw)&&okEAN(raw))return 'A'+raw;if(/^\d{12}$/.test(raw)&&okEAN('0'+raw))return 'A0'+raw;return null}
+function norm(raw){   // 11-13 digits: put back any leading zeros the decoder dropped (up to two); the check digit must then add up
+  if(!/^\d{11,13}$/.test(raw))return null;
+  const d=raw.padStart(13,'0');return okEAN(d)?'A'+d:null;
+}
 function makeItem(raw,nn){
   const n=nn||norm(raw),w=stamp(new Date(),true);
   if(!n)return{code:raw,plu:'',kg:'',price:'',sell:'',when:w};
@@ -101,7 +104,7 @@ const label=it=>it.plu?'PLU '+it.plu+' · '+it.kg+' kg · $'+it.sell:esc(it.code
 function saveQ(){localStorage.ecfq=JSON.stringify(queue);localStorage.ecfc=ctr;const e=$('q');e.textContent=(navigator.onLine?'':'Offline · ')+(queue.length?'Waiting to send: '+queue.length:'All sent');e.className=queue.length>20?'bad':''}
 function enqueue(list){
   const t=stamp(new Date(),false),note=$('note').value.trim(),st=mode==='Sell'?$('stype').value:'';
-  for(const it of list){ctr++;queue.push({id:t+it.code+ctr,f:{'entry.829806616':it.when,'entry.798642772':it.code,'entry.1746935441':mode,'entry.581625708':it.sell,'entry.28535428':ctr+';'+note,'entry.1039143216':st}})}
+  for(const it of list){ctr++;queue.push({id:t+it.code+ctr,f:{'entry.829806616':it.when,'entry.798642772':it.code,'entry.1746935441':mode,'entry.581625708':it.sell,'entry.28535428':ctr+';'+BUILD+';'+note,'entry.1039143216':st}})}
   saveQ();flush();
 }
 async function flush(){
@@ -228,9 +231,15 @@ $('ver').textContent='Build '+BUILD;
 if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
 /* ---- handheld Bluetooth scanner (keyboard mode) ---- */
 let src='cam',scanTimer;const si=$('scan');
-/* Scanner rule: exactly 13 digits followed by the terminator (carriage return). Anything else is a read error.
-   Stored as "A"+the 13 digits, as in the App Inventor app. */
-function checkScanner(raw){return /^\d{13}\r$/.test(raw)?'A'+raw.slice(0,13):null}
+/* Scanner rule: 13 digits followed by the terminator (carriage return), stored as "A"+13 digits.
+   Scanners drop leading zeros (an EAN-13 starting 0 reads as a 12-digit UPC-A). If 11 or 12 digits arrive, put back up to
+   two zeros and accept the code only if the check digit then adds up. Anything else is a read error. */
+function checkScanner(raw){
+  const m=/^(\d{11,13})\r$/.exec(raw);if(!m)return null;
+  let d=m[1];
+  if(d.length<13){d=d.padStart(13,'0');if(!okEAN(d))return null}
+  return 'A'+d;
+}
 function scanBad(t){
   beep(220,140);setTimeout(()=>beep(220,140),220);navigator.vibrate&&navigator.vibrate([80,60,80]);
   $('cur').className='row bad';$('cur').innerHTML='Not a valid pack barcode:<br><b>'+esc(t||'(empty)')+'</b>';
