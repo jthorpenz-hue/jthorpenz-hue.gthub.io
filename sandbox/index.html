@@ -119,7 +119,7 @@ input[type=range]{width:100%;accent-color:var(--go)}
   <h2>Where the text is</h2>
   <div class="row" style="margin-bottom:8px">
     <select id="pos" class="grow" aria-label="Text position"><option value="below">Text below the barcode</option><option value="above">Text above the barcode</option></select>
-    <select id="res" aria-label="Camera resolution"><option value="1280">720p</option><option value="1920" selected>1080p</option><option value="2560">1440p</option></select>
+    <select id="res" aria-label="Camera resolution"><option value="1280" selected>720p (same as scan app)</option><option value="1920">1080p</option><option value="2560">1440p</option></select>
   </div>
   <div style="display:flex;flex-direction:column;gap:6px">
     <label class="sl">Gap from bars<input type="range" id="gap" min="-10" max="30" step="0.5"><output id="gapV"></output></label>
@@ -153,7 +153,7 @@ const LIB={
   core:'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1',
   lang:'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int'
 };
-const BUILD='v4';   // change this every time the page is updated
+const BUILD='v5';   // change this every time the page is updated
 const CONSENSUS=3, LOGMAX=25;
 const $=id=>document.getElementById(id);
 const v=$('v'),ov=$('ov'),octx=ov.getContext('2d'),still=$('still'),sctx=still.getContext('2d');
@@ -167,10 +167,10 @@ const msg=t=>$('msg').textContent=t;
 const status=t=>$('status').textContent=t;
 
 /* ---- settings (remembered on this device) ---- */
-const DEF={rot:'auto',pos:'below',gap:1,ht:14,padL:9,padR:9,bin:'1',wl:'1',res:'1920'};
+const DEF={rot:'auto',pos:'below',gap:1,ht:14,padL:9,padR:9,bin:'1',wl:'1',res:'1280'};
 let S=Object.assign({},DEF);
-try{Object.assign(S,JSON.parse(localStorage.ecfOcrSet||'{}'))}catch(e){}
-function saveS(){try{localStorage.ecfOcrSet=JSON.stringify(S)}catch(e){}}
+try{Object.assign(S,JSON.parse(localStorage.ecfOcrSet5||'{}'))}catch(e){}
+function saveS(){try{localStorage.ecfOcrSet5=JSON.stringify(S)}catch(e){}}
 ['gap','ht','padL','padR'].forEach(k=>{const el=$(k);el.value=S[k];$(k+'V').textContent=(+S[k]).toFixed(1)+'%';
   el.oninput=()=>{S[k]=+el.value;$(k+'V').textContent=S[k].toFixed(1)+'%';saveS();rerunStill()}});
 ['rot','pos','bin','wl','res'].forEach(k=>{const el=$(k);el.value=S[k];el.onchange=async()=>{
@@ -195,12 +195,12 @@ async function initDetector(){
   zx=new ZXing.MultiFormatReader();zx.setHints(new Map([[ZXing.DecodeHintType.TRY_HARDER,true]]));
   $('info').textContent='Barcode reader: ZXing (this browser has no built-in reader)';
 }
-async function detect(){
+async function detect(src){
   if(det){
-    const r=await det.detect(F);
+    const r=await det.detect(src);
     return r.filter(b=>b.cornerPoints&&b.cornerPoints.length>=4).map(b=>({raw:b.rawValue,fmt:b.format,pts:b.cornerPoints.map(p=>[p.x,p.y])}));
   }
-  const w=Math.min(960,F.width),h=Math.round(w*F.height/F.width),k=F.width/w;Z.width=w;Z.height=h;zctx.drawImage(F,0,0,w,h);
+  const sw=src.videoWidth||src.width,sh=src.videoHeight||src.height,w=640,h=Math.round(w*sh/sw),k=sw/w;Z.width=w;Z.height=h;zctx.drawImage(src,0,0,w,h);
   try{const r=zx.decode(new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.HTMLCanvasElementLuminanceSource(Z))));
     return[{raw:r.getText(),fmt:String(ZXing.BarcodeFormat[r.getBarcodeFormat()]||r.getBarcodeFormat()),pts:r.getResultPoints().map(p=>[p.getX()*k,p.getY()*k])}]}catch(e){return[]}
 }
@@ -221,7 +221,27 @@ function levels(img,B,x0,x1){
   return{lo:dk+c*.35,hi:lt-c*.35};
 }
 /* Turn a detection into a box: origin at the top-left of the bars, u along the bars, v down the bars, w = width, h = bar height. */
+/* The reader's own box (Android built-in reader), used as-is when it has a real height, as in v1. */
+function readerBox(p){
+  if(p.length<4||S.rot==='level')return null;
+  const[tl,tr,br,bl]=p,u=nrm(sub(tr,tl)),vv=[-u[1],u[0]];
+  const w=(len(sub(tr,tl))+len(sub(br,bl)))/2,h=(dot(sub(bl,tl),vv)+dot(sub(br,tr),vv))/2;
+  if(h>w*.15)return{o:tl,u,v:vv,w,h};
+  if(h<-w*.15)return{o:bl,u,v:vv,w,h:-h};
+  return null;
+}
+/* Cheap box for frames that are not sent to OCR: the reader's box, or the reader's line plus the last measured bar height. */
+function quickBox(hit){
+  const p=hit.pts,rb=readerBox(p);if(rb)return rb;
+  if(SM.code!==hit.raw||performance.now()-SM.t>1500)return null;
+  let a,b;if(p.length>=4){const[tl,tr,br,bl]=p;a=[(tl[0]+bl[0])/2,(tl[1]+bl[1])/2];b=[(tr[0]+br[0])/2,(tr[1]+br[1])/2]}
+  else{a=p[0];b=p[p.length-1];if(b[0]<a[0])[a,b]=[b,a]}
+  const ang=S.rot==='level'?0:p.length>=4?Math.atan2(b[1]-a[1],b[0]-a[0]):SM.ang,u=[Math.cos(ang),Math.sin(ang)],vv=[-u[1],u[0]],w=Math.abs(dot(sub(b,a),u));
+  if(w<20)return null;
+  return{o:at({o:a,u,v:vv},0,SM.top*w),u,v:vv,w,h:(SM.bot-SM.top)*w};
+}
 function boxOf(hit){
+  {const rb=readerBox(hit.pts);if(rb)return rb}
   // Readers report the barcode differently (Android's built-in reader often gives a thin line, ZXing gives a level line),
   // so take only a line through the bars from the reader and measure the bars themselves from the image.
   const p=hit.pts,has4=p.length>=4;let a,b;
@@ -401,8 +421,11 @@ function poly(V,pts,color,dash){
   octx.setLineDash(dash?[10,8]:[]);octx.lineWidth=4*devicePixelRatio;octx.lineJoin='round';octx.strokeStyle=color;octx.stroke();
 }
 function draw(hit,B){
-  const V=view();octx.clearRect(0,0,ov.width,ov.height);if(!hit||!B)return;
-  poly(V,[at(B,0,0),at(B,B.w,0),at(B,B.w,B.h),at(B,0,B.h)],'#1fb85a');
+  const V=view();octx.clearRect(0,0,ov.width,ov.height);if(!hit)return;
+  if(hit.pts.length>=4)poly(V,hit.pts,'#1fb85a');
+  else if(B)poly(V,[at(B,0,0),at(B,B.w,0),at(B,B.w,B.h),at(B,0,B.h)],'#1fb85a');
+  else{const xs=hit.pts.map(q=>q[0]),ys=hit.pts.map(q=>q[1]),a=Math.min(...xs)-14,b=Math.min(...ys)-30,c=Math.max(...xs)+14,d=Math.max(...ys)+30;poly(V,[[a,b],[c,b],[c,d],[a,d]],'#1fb85a')}
+  if(!B)return;
   const r=ocrRect(B);poly(V,[at(B,r.x0,r.y0),at(B,r.x1,r.y0),at(B,r.x1,r.y1),at(B,r.x0,r.y1)],'#2f7bf0',true);
 }
 
@@ -410,14 +433,16 @@ function draw(hit,B){
 async function tick(){
   if(!running)return;
   const now=performance.now();
-  if(!frozen&&!detBusy&&now-lastDet>120&&v.readyState>=2){
+  if(!frozen&&!detBusy&&now-lastDet>90&&v.readyState>=2){
     detBusy=true;lastDet=now;
     if(F.width!==v.videoWidth){F.width=v.videoWidth;F.height=v.videoHeight}
-    fctx.drawImage(v,0,0);
-    let hits=[];try{hits=await detect()}catch(e){}
-    const hit=hits[0]||null,B=hit?boxOf(hit):null;
+    const grab=!ocrBusy&&!!worker;          // copy the frame only when it will go to the OCR
+    if(grab)fctx.drawImage(v,0,0);
+    let hits=[];try{hits=await detect(grab?F:v)}catch(e){}
+    const hit=hits[0]||null,B=hit?(grab?boxOf(hit):quickBox(hit)):null;
     draw(hit,B);
-    if(hit&&B){lastHit={hit,B};msg(hit.fmt+' · bars '+Math.round(B.w)+'×'+Math.round(B.h)+' px'+(B.h<B.w*.08?' · bar height not found, hold steadier':'')+' · '+(ocrBusy?'reading…':'ready'));if(!ocrBusy)runOCR(hit,B)}
+    if(hit){msg(hit.fmt+(B?' · bars '+Math.round(B.w)+'×'+Math.round(B.h)+' px':'')+' · '+(ocrBusy?'reading…':'ready'));
+      if(grab&&B){lastHit={hit,B};runOCR(hit,B)}}
     else msg('Point the camera at a barcode label');
     detBusy=false;
   }
@@ -461,7 +486,7 @@ $('photo').onchange=async e=>{
   const bmp=await createImageBitmap(f);F.width=bmp.width;F.height=bmp.height;fctx.drawImage(bmp,0,0);
   still.width=bmp.width;still.height=bmp.height;sctx.drawImage(bmp,0,0);still.style.display='block';v.style.display='none';
   try{await initDetector()}catch(e){return msg('Could not load the barcode reader.')}
-  const hits=await detect().catch(()=>[]);
+  const hits=await detect(F).catch(()=>[]);
   if(!hits.length){draw(null);lastHit=null;return msg('No barcode found in this photo')}
   const hit=hits[0],B=boxOf(hit);if(!B){draw(null);return msg('Barcode found but too small, move closer')}lastHit={hit,B};draw(hit,B);msg(hit.fmt+' · bars '+Math.round(B.w)+'×'+Math.round(B.h)+' px · move the sliders to re-test');
   await waitOCR();runOCR(hit,B);
