@@ -1,1 +1,923 @@
+<!doctype html>
+<html lang="en-NZ">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ECF scanner beta</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1d2a2f">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{--ink:#1d2a2f;--chalk:#f2f4f3;--steel:#5b6b70;--line:#d5dcda;--go:#1fb85a;--hold:#f0a020;--bad:#d6393f;--card:#fff;--soft:#e8edeb}
+*{box-sizing:border-box}
+body{margin:0;background:var(--chalk);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:560px;margin:0 auto;padding:10px 10px 40px}
+header{display:flex;justify-content:space-between;align-items:center;gap:8px}
+h1{font-size:1.15rem;margin:4px 0}
+.beta{display:inline-block;background:var(--hold);color:var(--ink);font-size:.65rem;font-weight:700;padding:1px 6px;border-radius:999px;vertical-align:2px;letter-spacing:.04em}
+#q{font-size:.8rem;color:var(--steel);text-align:right}#q.bad{color:var(--bad);font-weight:600}#q.warn{color:#b26a00;font-weight:600}
+button,select,input[type=text],input[type=password],input[type=number],textarea{font:inherit;min-height:46px;border-radius:8px}
+button{padding:10px 14px;border:0;background:var(--ink);color:#fff;cursor:pointer}
+button:disabled{background:var(--line);color:var(--steel);cursor:default}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--go);outline-offset:2px}
+button.go{background:var(--go)}button.warn{background:var(--hold);color:var(--ink)}button.ghost{background:#fff;color:var(--ink);border:2px solid var(--ink)}button.danger{background:var(--bad)}
+button.sm{min-height:34px;padding:4px 10px;font-size:.85rem}
+select,input[type=text],input[type=password],input[type=number],textarea{width:100%;padding:8px 10px;border:2px solid var(--line);background:#fff;color:var(--ink)}
+label.f{display:block;font-size:.8rem;color:var(--steel);margin:6px 0 2px}
+.row{display:flex;gap:8px;margin:8px 0;flex-wrap:wrap;align-items:center}
+.half{flex:1;min-width:130px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0}
+.seg{display:flex;gap:0;margin:0}
+.seg button{flex:1;background:#fff;color:var(--ink);border:2px solid var(--ink);border-radius:0;padding:8px 4px;min-height:42px}
+.seg button:first-child{border-radius:8px 0 0 8px}.seg button:last-child{border-radius:0 8px 8px 0}.seg button+button{border-left:0}
+.seg button.on{background:var(--go);border-color:var(--go);color:#fff;font-weight:600}
+.modes{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.modes button{flex:1 1 30%;background:#fff;color:var(--ink);border:2px solid var(--ink);padding:8px 2px;min-height:42px;font-size:.9rem}
+.modes button.on{background:var(--go);border-color:var(--go);color:#fff;font-weight:600}
+#roles{display:grid;gap:10px;margin-top:14px}
+#roles button{min-height:84px;font-size:1.15rem;text-align:left;padding:14px 18px;background:#fff;color:var(--ink);border:2px solid var(--ink)}
+#roles button small{display:block;font-weight:400;color:var(--steel);font-size:.8rem;margin-top:2px}
+#cam{position:relative;background:#101719;border-radius:10px;overflow:hidden;height:0;padding-top:70%}
+#cam video,#cam canvas{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
+#msg{position:absolute;left:0;right:0;bottom:0;padding:6px 12px;background:rgba(16,23,25,.72);color:#fff;font-size:.85rem}
+#cap{width:100%;font-weight:600}#cap.ready{background:var(--go)}
+#cur{background:#fff;border:2px solid var(--line);border-radius:10px;padding:10px;min-height:70px}
+#cur.ok{border-color:var(--go)}#cur.hold{border-color:var(--hold);background:#fff8e8}#cur.bad{border-color:var(--bad);background:#fdeceb}
+#cur .big{font-size:1.1rem;font-weight:700}#cur .mut{color:var(--steel);font-size:.85rem}
+.tag{display:inline-block;font-size:.75rem;font-weight:700;padding:1px 8px;border-radius:999px;background:var(--soft);margin:2px 4px 2px 0}
+.tag.amber{background:var(--hold)}.tag.red{background:var(--bad);color:#fff}.tag.green{background:var(--go);color:#fff}
+ul.list{list-style:none;margin:6px 0;padding:0}
+ul.list li{padding:8px 10px;border:1px solid var(--line);background:#fff;border-radius:8px;margin-bottom:4px}
+ul.list li.sel{border:2px solid var(--go)}
+ul.list li .sub{color:var(--steel);font-size:.8rem}
+ul.list li .w{color:#b26a00;font-size:.8rem}
+.line{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.prog{height:8px;background:var(--soft);border-radius:4px;overflow:hidden;margin-top:4px}.prog i{display:block;height:100%;background:var(--go)}
+.sec{font-size:.8rem;font-weight:700;color:var(--steel);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 4px}
+#tot{font-weight:600}
+#info,#ver{color:var(--steel);font-size:.75rem}
+.banner{padding:8px 12px;border-radius:8px;margin:6px 0;font-size:.9rem}
+.banner.amber{background:#fff1d6;border:1px solid var(--hold)}.banner.red{background:#fdeceb;border:1px solid var(--bad)}
+[hidden]{display:none!important}
+#modal,#settings{position:fixed;inset:0;background:rgba(16,23,25,.6);z-index:50;display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow:auto}
+#modal .box,#settings .box{background:#fff;border-radius:12px;padding:14px;width:100%;max-width:480px;margin-top:6vh}
+#modal h2,#settings h2{margin:0 0 6px;font-size:1.1rem}
+#modal .row button{flex:1}
+</style>
+</head>
+<body>
+<script>window.onerror=function(m,u,l){var d=document.createElement('div');d.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99;background:#d6393f;color:#fff;padding:8px 12px;font:14px sans-serif';d.textContent='Error: '+m+' (line '+l+')';document.body.appendChild(d)};</script>
+<main>
+<header>
+  <div><h1>ECF scanner <span class="beta">BETA</span></h1><button id="rolebtn" class="sm ghost" hidden></button></div>
+  <div id="q"></div>
+</header>
+<div id="banners">
+  <button id="install" hidden class="go" style="width:100%;margin:6px 0">Install app on this phone</button>
+  <button id="upd" hidden class="warn" style="width:100%;margin:6px 0">New version ready: tap to reload</button>
+  <div id="setupnote" class="banner amber" hidden></div>
+</div>
 
+<section id="rolescreen" hidden>
+  <p style="margin:6px 0">Who is using this phone now?</p>
+  <div id="roles"></div>
+  <div class="row"><button id="openset1" class="ghost sm">Settings</button></div>
+</section>
+
+<section id="work" hidden>
+  <div class="modes" id="modes"></div>
+  <div id="opts" class="card"></div>
+
+  <div id="cur">Pick a mode, then scan a pack label.</div>
+
+  <div class="row"><select id="src" aria-label="Input source"><option value="cam">Input: phone camera</option><option value="bt">Input: handheld Bluetooth scanner</option></select></div>
+  <div id="cam" class="camonly"><video id="v" playsinline muted></video><canvas id="o"></canvas><div id="msg">Camera is off</div></div>
+  <div class="row camonly"><button id="power" style="flex:1">Enable camera</button><button id="torch" hidden>Torch</button></div>
+  <div id="btui" hidden><label for="scan" style="font-size:.85rem;color:var(--steel)">Handheld scanner: pull the trigger to scan</label><input type="text" id="scan" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Waiting for scanner…"><div id="dbg" style="font-size:.75rem;color:var(--steel)">Scanner readout: waiting for a key</div></div>
+  <div class="row camonly">
+    <select id="auto" class="half" aria-label="Scan mode"><option value="1">Auto scan</option><option value="0" selected>Manual scan</option></select>
+    <select id="dup" class="half" aria-label="Repeat rule"><option value="rearm">Repeat after code leaves frame</option><option value="strict" selected>No repeat until new code</option></select>
+  </div>
+  <button id="cap" class="camonly" disabled>Capture</button>
+
+  <div id="modearea"></div>
+
+  <div class="row"><input type="text" id="note" placeholder="Note (people only, saved with each scan)" aria-label="Note"></div>
+
+  <div class="sec">Recent scans</div>
+  <ul class="list" id="recent"></ul>
+</section>
+
+<p id="info"></p>
+<p id="ver"></p>
+</main>
+
+<div id="modal" hidden><div class="box"><h2 id="mt"></h2><div id="mb"></div><div class="row" id="mbtn"></div></div></div>
+
+<div id="settings" hidden><div class="box">
+  <h2>Settings</h2>
+  <label class="f" for="s_dev">Device name (once per phone, e.g. Packing, Market 1)</label>
+  <input type="text" id="s_dev" autocomplete="off">
+  <label class="f" for="s_url">Web app address (Apps Script)</label>
+  <input type="text" id="s_url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://script.google.com/macros/s/.../exec">
+  <label class="f" for="s_tok">Device token</label>
+  <input type="password" id="s_tok" autocomplete="off">
+  <div class="row"><button id="s_save" class="go half">Save and connect</button><button id="s_close" class="ghost half">Close</button></div>
+  <div class="row"><button id="s_send" class="ghost half sm">Send queue now</button><button id="s_clear" class="ghost half sm">Clear cached data</button></div>
+  <div id="s_status" class="sub" style="font-size:.85rem;color:var(--steel)"></div>
+</div></div>
+
+<script>
+/* ============================== constants ============================== */
+const BUILD='vB0.1.1';
+const DEFAULT_URL='https://script.google.com/macros/s/AKfycbyx2IrRDLzrY4J_yH5TUdAi8QVsR4hpaZvZeYHevBeIUjIxjGNHkjU9S1_ooV4S2Yvn/exec';   // paste the Apps Script web app address (ending /exec) between the quotes and the phones need no setup for it   // keep in step with V in sw.js
+const ROLES=[
+ {name:'Meat Packing',sub:'IN: put new packs into stock'},
+ {name:'Order Packing',sub:'Pick list for webshop orders'},
+ {name:'Manage Stock',sub:'OUT, Return, Freeze, boxes, stocktake, fix-ups'},
+ {name:'Selling',sub:'Sell at the shop, markets, family, special orders'}];
+const MODES={'Meat Packing':['IN'],'Order Packing':['Pick'],
+ 'Manage Stock':['Out','Return','Freeze','Thaw','Allocate online','Remove online','Write-off','Build box','Unpack','Stocktake','Fix-ups'],
+ 'Selling':['Sell']};
+const SALE_TYPES=['Shop','Market NFM','Market MOT','Market TAK','Family','Special order'];
+const OUT_DEST=['Shop','Market NFM','Market MOT','Market TAK','Retailer','Special order'];
+const RETURN_FROM=['Market NFM','Market MOT','Market TAK','Shop','Special order','Web order'];
+const WRITEOFF_WHY=['Damaged','Out of date','Mislabelled','Dropped','Quality','Other'];
+const ST_LOCS=['Chiller','Freezer','Shop','Market'];
+const REMOVES={Sell:1,Out:1,Writeoff:1,Offline:1,Missing:1};   // actions that can take a pack out of the online pool
+const GO='#1fb85a',HOLD='#f0a020',IDLE=60000,REARM=1500;
+
+/* ============================== state ============================== */
+const $=id=>document.getElementById(id);
+const LS=(k,d)=>{try{const v=localStorage.getItem('ecfb.'+k);return v==null?d:JSON.parse(v)}catch(e){return d}};
+const SV=(k,v)=>{try{localStorage.setItem('ecfb.'+k,JSON.stringify(v))}catch(e){}};
+let cfg=LS('cfg',{url:'',token:'',device:''}),ref=LS('ref',null),queue=LS('q',[]),recent=LS('recent',[]),ctr=LS('ctr',0),role=LS('role','');
+if(!cfg.url&&DEFAULT_URL)cfg.url=DEFAULT_URL;
+let mode='',busy=false,refBusy=false,lastErr='',modalOpen=false;
+let sticky={temp:'Chilled',online:'',origin:'',animal:'',dest:'Shop',from:'Market NFM',why:'Damaged',stype:'Shop',ref:''};
+let basket=[],bsel=-1,boxB=null,st=null,doneBox=null,scanLog=[];
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>'&#'+c.charCodeAt(0)+';');
+const pad=n=>String(n).padStart(2,'0');
+const nowIso=()=>new Date().toISOString();
+const hhmm=d=>{d=new Date(d);return pad(d.getHours())+':'+pad(d.getMinutes())};
+const slug=()=>(cfg.device||'dev').replace(/[^A-Za-z0-9]/g,'').slice(0,6)||'dev';
+function newId(){ctr++;SV('ctr',ctr);return slug()+'-'+Date.now().toString(36)+ctr.toString(36)+Math.floor(Math.random()*1296).toString(36)}
+function ymdhms(d){d=d||new Date();return String(d.getFullYear()).slice(2)+pad(d.getMonth()+1)+pad(d.getDate())+'-'+pad(d.getHours())+pad(d.getMinutes())+pad(d.getSeconds())}
+
+/* ============================== reference data ============================== */
+const prodMap=()=>{const m={};((ref&&ref.products)||[]).forEach(p=>{m[p.plu]=p});return m};
+let PM=prodMap();
+const S=()=>(ref&&ref.settings)||{};
+function plist(){return (ref&&ref.products)||[]}
+function variantOf(origin){
+  const o=String(origin||'').toLowerCase();let hits=[];
+  ((ref&&ref.variants)||[]).forEach(v=>{if(!v.suffix)return;for(const w of v.words||[])if(w&&o.indexOf(w)>=0){hits.push(v);break}});
+  return{suffix:hits.length?hits[0].suffix:'',name:hits.length?hits[0].name:'',multi:hits.length>1};
+}
+async function refresh(manual){
+  if(refBusy||!cfg.url)return;refBusy=true;
+  try{
+    const u=cfg.url+(cfg.url.indexOf('?')<0?'?':'&')+'token='+encodeURIComponent(cfg.token||'');
+    const r=await fetch(u,{redirect:'follow'}),j=await r.json();
+    if(!j.ok){lastErr=j.error==='Bad token'?'The web app refused the device token.':(j.error||'Web app error');showStatus();return}
+    ref=j;ref.fetched=nowIso();SV('ref',ref);PM=prodMap();lastErr='';
+    if(!sticky.origin&&S().defaultOrigin)sticky.origin=S().defaultOrigin;
+    renderOpts();showStatus();if(manual)setStat('Connected to web app version '+j.version+'. '+plist().length+' products.');
+  }catch(e){if(manual)setStat('Could not reach the web app: '+e.message)}
+  finally{refBusy=false;showStatus();checkSetup()}
+}
+function setStat(t){$('s_status').textContent=t}
+setInterval(()=>{if(navigator.onLine&&cfg.url&&!document.hidden)refresh()},5*60000);
+
+/* ============================== queue and upload ============================== */
+function saveQ(){SV('q',queue);SV('recent',recent.slice(-40));showStatus()}
+function showStatus(){
+  const e=$('q');let t=[],cls='';
+  if(!navigator.onLine)t.push('Offline');
+  t.push(queue.length?'Waiting to send: '+queue.length:'All sent');
+  if(!cfg.url){t.push('Not set up');cls='warn'}
+  else if(lastErr){t.push(lastErr);cls='bad'}
+  else if(ref&&ref.fetched){const age=(Date.now()-new Date(ref.fetched))/60000;t.push('Data '+hhmm(ref.fetched));if(age>60)cls='warn'}
+  else{t.push('No data yet');cls='warn'}
+  if(queue.length>20)cls='bad';
+  e.textContent=t.join(' · ');e.className=cls;
+}
+function enqueue(events,label,extra){
+  const ids=events.map(e=>e.id);
+  events.forEach(e=>queue.push(e));
+  recent.push(Object.assign({ids,label,time:nowIso(),status:'queued',warn:'',voided:false},extra||{}));
+  saveQ();renderRecent();flush();
+}
+async function flush(){
+  if(busy||!queue.length||!cfg.url)return;busy=true;
+  try{
+    const batch=queue.slice(0,50);
+    const c=window.AbortController?new AbortController():null,to=setTimeout(()=>c&&c.abort(),25000);
+    const r=await fetch(cfg.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:cfg.token,events:batch}),signal:c&&c.signal,redirect:'follow'});
+    clearTimeout(to);const j=await r.json();
+    if(!j.ok){lastErr=j.error==='Bad token'?'The web app refused the device token.':(j.error||'Web app error');busy=false;showStatus();return}
+    lastErr='';
+    const got={};(j.stored||[]).forEach(id=>got[id]=1);
+    queue=queue.filter(e=>!got[e.id]);
+    recent.forEach(r=>{if(r.ids.some(id=>got[id])){r.status='sent';const w=r.ids.map(id=>(j.warnings||{})[id]).filter(Boolean);if(w.length)r.warn=w.filter((x,i)=>w.indexOf(x)===i).join('; ')}});
+    saveQ();renderRecent();busy=false;
+    if(queue.length)flush();else refresh();
+  }catch(e){busy=false}
+}
+setInterval(flush,4000);addEventListener('online',()=>{showStatus();flush();refresh()});addEventListener('offline',showStatus);
+addEventListener('beforeunload',e=>{if(queue.length){e.preventDefault();e.returnValue=''}});
+
+/* ============================== audio ============================== */
+let ac;
+function audio(){try{ac=ac||new(window.AudioContext||window.webkitAudioContext)();ac.resume()}catch(e){}}
+function beep(f,ms){audio();if(!ac)return;const t=ac.currentTime,g=ac.createGain(),s=ac.createOscillator();s.frequency.value=f;s.connect(g);g.connect(ac.destination);g.gain.setValueAtTime(.25,t);g.gain.setValueAtTime(0,t+ms/1e3);s.start(t);s.stop(t+ms/1e3+.02)}
+const okTone=()=>{beep(1200,90);navigator.vibrate&&navigator.vibrate(40)};
+const warnTone=()=>{beep(700,120);setTimeout(()=>beep(900,120),160);navigator.vibrate&&navigator.vibrate([60,40,60])};
+const badTone=()=>{beep(220,140);setTimeout(()=>beep(220,140),220);navigator.vibrate&&navigator.vibrate([80,60,80])};
+
+/* ============================== barcodes ============================== */
+function okEAN(s){let t=0;for(let i=0;i<12;i++)t+=(+s[i])*(i%2?3:1);return (10-t%10)%10===+s[12]}
+function gtinOk(g){if(!/^\d{14}$/.test(g))return false;let t=0;for(let i=0;i<13;i++)t+=(+g[i])*(i%2?1:3);return (10-t%10)%10===+g[13]}
+function parseGs1(s){
+  s=String(s).replace(/^\]C1/,'');const res={},sep=/[\x1d~|]/;let m;
+  if(s.indexOf('(')>=0){const re=/\((\d{2,4})\)([^(]*)/g;while((m=re.exec(s)))res[m[1]]=m[2].replace(/[\x1d~|]/g,'')}
+  else{
+    if(!/^01\d{14}/.test(s))return null;
+    const fixed={'01':14,'11':6,'13':6,'15':6,'17':6};let i=0;
+    while(i<s.length){
+      if(sep.test(s[i])){i++;continue}
+      const a2=s.substr(i,2),a4=s.substr(i,4);
+      if(a4==='8008'){res['8008']=s.substr(i+4,12);i+=16}
+      else if(fixed[a2]){res[a2]=s.substr(i+2,fixed[a2]);i+=2+fixed[a2]}
+      else if(/^310\d$/.test(a4)){res[a4]=s.substr(i+4,6);i+=10}
+      else if(/^392\d$/.test(a4)||a2==='21'||a2==='10'){const ai=/^392\d$/.test(a4)?a4:a2;let k=i+ai.length;const j=k;while(k<s.length&&!sep.test(s[k]))k++;res[ai]=s.substring(j,k);i=k}
+      else return null;
+    }
+  }
+  return(res['01']&&(res['8008']||res['21']))?res:null;
+}
+const gsDate=v=>/^\d{6}$/.test(v||'')?'20'+v.substr(0,2)+'-'+v.substr(2,2)+'-'+v.substr(4,2):'';
+/** Reads any scan. kind: ean13 (old label, stored "A"+13 digits), gs1 (new label), box, other. */
+function parseScan(raw){
+  raw=String(raw==null?'':raw).trim();
+  const o={raw,kind:raw?'other':'none',code:raw,plu:'',kg:'',price:'',serial:'',packed:'',best:'',err:''};
+  const m=/^A?(\d{11,13})$/.exec(raw);
+  if(m){const d=('0000000000000'+m[1]).slice(-13);if(okEAN(d)){Object.assign(o,{kind:'ean13',code:'A'+d,plu:d.slice(0,3),kg:+d.slice(3,7)/1000,price:+d.slice(7,12)/100});return o}}
+  if(/^BOX[-A-Z0-9]+$/i.test(raw)){o.kind='box';o.code=raw.toUpperCase();return o}
+  const g=parseGs1(raw);
+  if(g){
+    if(!gtinOk(g['01'])){o.err='GTIN check digit is wrong';return o}
+    const order=['01','3103','8008','21','15','17','3922'],keys=order.filter(k=>g[k]).concat(Object.keys(g).filter(k=>order.indexOf(k)<0));
+    o.kind='gs1';o.code=keys.map(k=>'('+k+')'+g[k]).join('');o.plu=g['01'].slice(10,13);
+    o.serial=g['01']+'-'+(g['8008']||g['21']);
+    Object.keys(g).forEach(ai=>{if(/^310\d$/.test(ai))o.kg=+g[ai]/Math.pow(10,+ai[3]);if(/^392\d$/.test(ai))o.price=+g[ai]/Math.pow(10,+ai[3])});
+    o.packed=gsDate(g['8008']?g['8008'].slice(0,6):'');o.best=gsDate(g['15']||g['17']);
+  }
+  return o;
+}
+
+/* Band rule (same as the Sheet's Code.gs) */
+function bandFor(wKg,labelPrice,p,s){
+  const w=wKg*1000,inc=(p&&p.inc>0)?p.inc:100;
+  const max50=(p&&p.max50!==''&&p.max50!=null&&!isNaN(+p.max50))?+p.max50:(s.default50==null?300:s.default50);
+  const half=inc/2,e=1e-9;
+  const dn50=Math.max(1,Math.floor(w/half+e))*half,up50=Math.ceil(w/half-e)*half,dn=Math.max(1,Math.floor(w/inc+e))*inc,up=Math.ceil(w/inc-e)*inc;
+  const lo=w>max50?dn:dn50,hi=w>max50?up:up50;
+  const perKg=wKg>0?Math.round(labelPrice/wKg*10)/10:0;
+  const maxOver=Math.min(s.maxOverAbs==null?1:s.maxOverAbs,(s.maxOverPct==null?.2:s.maxOverPct)*labelPrice);
+  let sel=lo;
+  if(w-lo>=(1-(s.underMargin==null?.3:s.underMargin))*(hi-lo)-e)sel=(hi*perKg/1000-labelPrice>=maxOver)?lo:hi;
+  const over=(sel/1000-wKg)*perKg;
+  return{band:sel,over,tooLow:over<(s.maxUnder==null?-2.5:s.maxUnder),perKg};
+}
+const keyOf=(plu,variant,band,temp)=>plu+(variant?'-'+variant:'')+'-'+band+'-'+(/^f/i.test(temp)?'F':'C');
+/** Product, band, stock key and flags for a scanned pack. */
+function analyse(pr,temp,variant){
+  const s=S(),p=PM[pr.plu]||null,a={p,flags:[],under:false,band:'',webPlu:pr.plu,variant:variant||'',key:'',perKg:null,known:!!p};
+  if(!p)a.flags.push('Unknown PLU '+pr.plu);
+  if(p&&s.lambHogget&&p.hogget)a.webPlu=p.hogget;
+  const w=pr.kg;let band='';
+  if(w!==''&&w<=0.0011)band=(p&&p.fixedG>0)?p.fixedG:(s.defaultFixedG||1000);
+  else if(p&&/item/i.test(p.basis||''))band=0;
+  else if(w>0){const b=bandFor(w,pr.price,p,s);band=b.band;a.under=b.tooLow;a.perKg=b.perKg;if(p&&b.perKg!==p.price)a.flags.push('Label price differs from schedule')}
+  a.band=band;if(band!=='')a.key=keyOf(a.webPlu,a.variant,band,temp);
+  return a;
+}
+/** Online, claims and spare for a band (variants added together because old labels do not carry one). */
+function stockInfo(a,temp){
+  if(!ref||!ref.stock||a.band==='')return null;
+  const t=/^f/i.test(temp)?'F':'C',re=new RegExp('^'+a.webPlu+'(-[A-Z0-9]+)*-'+a.band+'-'+t+'$');
+  let r={inStock:0,online:0,claims:0,found:false};
+  ref.stock.forEach(x=>{if(re.test(x.key)){r.found=true;r.inStock+=+x.inStock||0;r.online+=+x.online||0;r.claims+=+x.claims||0}});
+  r.spare=r.online-r.claims;return r.found?r:null;
+}
+const short=i=>i&&i.online>0&&i.claims>0&&i.spare<=0;
+function localTake(a,temp){   // keep the on-phone counts roughly right until the next refresh
+  const i=stockInfo(a,temp);if(!i)return;
+  const t=/^f/i.test(temp)?'F':'C',re=new RegExp('^'+a.webPlu+'(-[A-Z0-9]+)*-'+a.band+'-'+t+'$');
+  for(const x of ref.stock)if(re.test(x.key)){x.inStock=Math.max(0,(+x.inStock||0)-1);if(x.online>0)x.online--;break}
+  SV('ref',ref);
+}
+function nameOfKey(key){
+  const parts=String(key).split('-'),p=PM[parts[0]];
+  const f=parts[parts.length-1]==='F'?'frozen':'chilled',g=parts[parts.length-2];
+  return(p?p.name:'PLU '+parts[0])+' '+g+' g '+f;
+}
+
+/* ============================== modal ============================== */
+function dlg(title,html,btns){
+  return new Promise(res=>{
+    modalOpen=true;$('mt').textContent=title;$('mb').innerHTML=html||'';
+    const bx=$('mbtn');bx.innerHTML='';
+    (btns||[{t:'OK',v:true,c:'go'}]).forEach(b=>{const e=document.createElement('button');e.textContent=b.t;e.className=b.c||'';e.onclick=()=>{
+      const val=typeof b.v==='function'?b.v():b.v;if(val===undefined)return;modalOpen=false;$('modal').hidden=true;res(val)};bx.appendChild(e)});
+    $('modal').hidden=false;
+  });
+}
+const confirmD=(title,html,yes)=>dlg(title,html,[{t:'Cancel',v:false,c:'ghost'},{t:yes||'Confirm',v:true,c:'go'}]);
+const askNum=(title,label,def)=>dlg(title,'<label class="f">'+esc(label)+'</label><input type="number" id="dn" inputmode="decimal" value="'+esc(def==null?'':def)+'">',
+  [{t:'Cancel',v:null,c:'ghost'},{t:'OK',c:'go',v:()=>{const v=$('dn').value.trim();return v===''||isNaN(v)?undefined:+v}}]);
+async function shortGate(list){   // list of {name,info}; returns true to go ahead
+  const bad=list.filter(x=>short(x.info));if(!bad.length)return true;
+  warnTone();
+  return confirmD('Order would be left short',bad.map(x=>'<p><b>'+esc(x.name)+'</b><br>Open web orders need '+x.info.claims+' of '+x.info.online+' packs in this band. Taking this one leaves an order short.</p>').join('')+'<p>Continue logs the event and raises a shortage alert.</p>','Continue');
+}
+
+/* ============================== events ============================== */
+function mkEvent(type,barcode,o){
+  return Object.assign({id:newId(),time:nowIso(),barcode:barcode||'',type,type2:'',salePrice:'',note:$('note').value.trim(),temperature:'',online:'',location:'',reference:'',
+    animalCode:'',farmOrigin:'',variant:'',role,device:cfg.device,build:BUILD,qty:1},o||{});
+}
+const tempFor=(pr,m)=>(pr.kind==='gs1'&&m!=='IN')?'':sticky.temp;
+const labelOf=(pr,a)=>a&&a.p?a.p.name+' · '+(a.band===0?'item':a.band+' g'):(pr.kind==='box'?'Box '+pr.code:pr.code);
+
+/* ============================== screens ============================== */
+function el(tag,attrs,html){const e=document.createElement(tag);Object.keys(attrs||{}).forEach(k=>e.setAttribute(k,attrs[k]));if(html!=null)e.innerHTML=html;return e}
+function seg(id,opts,val,on){
+  return'<div class="seg" id="'+id+'">'+opts.map(o=>'<button type="button" data-v="'+esc(o.v)+'" class="'+(o.v===val?'on':'')+'">'+esc(o.t)+'</button>').join('')+'</div>';
+}
+function bindSeg(id,fn){const b=$(id);if(!b)return;b.onclick=e=>{const t=e.target.closest('button');if(!t)return;Array.prototype.forEach.call(b.children,x=>x.classList.toggle('on',x===t));fn(t.dataset.v)}}
+function sel(id,opts,val){return'<select id="'+id+'">'+opts.map(o=>'<option'+(o===val?' selected':'')+'>'+esc(o)+'</option>').join('')+'</select>'}
+const TEMP_SEG=()=>'<label class="f">Temperature of the pack'+(mode==='IN'?'':' (new labels know it; old labels do not)')+'</label>'+seg('o_temp',[{v:'Chilled',t:'Chilled'},{v:'Frozen',t:'Frozen'}],sticky.temp);
+function renderOpts(){
+  const o=$('opts');if(!mode){o.hidden=true;return}o.hidden=false;let h='',after=[];
+  const refRow='<label class="f" for="o_ref">Reference (retailer name, invoice or order)</label><input type="text" id="o_ref" value="'+esc(sticky.ref)+'">';
+  if(mode==='IN'){
+    const v=variantOf(sticky.origin);
+    h='<label class="f">Channel</label>'+seg('o_online',[{v:'',t:'Auto'},{v:'Online',t:'Online'},{v:'Offline',t:'Offline only'}],sticky.online)+TEMP_SEG()+
+      '<label class="f" for="o_origin">Farm origin (default ECF; clear it if not needed)</label><input type="text" id="o_origin" value="'+esc(sticky.origin)+'" autocomplete="off">'+
+      '<div id="o_var" class="mut" style="font-size:.85rem;color:var(--steel)">'+(v.suffix?'Variant: '+esc(v.name)+(v.multi?' (origin matches more than one variant)':''):'Variant: Ellis Creek (default)')+'</div>'+
+      '<label class="f" for="o_animal">Animal code</label><input type="text" id="o_animal" value="'+esc(sticky.animal)+'" autocomplete="off">';
+  }else if(mode==='Pick'){h='<div class="sec" style="margin-top:0">Open web orders</div><div id="picklist"></div>'}
+  else if(mode==='Out'){h='<label class="f">Send to</label>'+sel('o_dest',OUT_DEST,sticky.dest)+refRow+TEMP_SEG()}
+  else if(mode==='Return'){h='<label class="f">Coming back from</label>'+sel('o_from',RETURN_FROM,sticky.from)+'<label class="f">Channel</label>'+seg('o_online',[{v:'',t:'Offline only'},{v:'Online',t:'Online'}],sticky.online==='Online'?'Online':'')+TEMP_SEG()}
+  else if(mode==='Freeze'||mode==='Thaw'){h='<div class="mut" style="font-size:.85rem;color:var(--steel)">Scan each pack to '+mode.toLowerCase()+', or scan a box label to '+mode.toLowerCase()+' the whole box.</div>'}
+  else if(mode==='Allocate online'||mode==='Remove online'){h='<div style="font-size:.85rem;color:var(--steel)">'+(mode==='Allocate online'?'Scan packs to make them available on the webshop.':'Scan packs to take them off the webshop (stays in stock).')+'</div>'+TEMP_SEG()}
+  else if(mode==='Write-off'){h='<label class="f">Reason</label>'+sel('o_why',WRITEOFF_WHY,sticky.why)+TEMP_SEG()}
+  else if(mode==='Sell'){h='<label class="f">Sale type</label>'+sel('o_stype',SALE_TYPES,sticky.stype)+refRow+TEMP_SEG()}
+  else if(mode==='Unpack'){h='<div style="font-size:.85rem;color:var(--steel)">Scan a box barcode (every pack goes back into stock) or choose a box below. Scanning a single pack takes just that pack out.</div><div class="row"><select id="o_box"></select><button id="o_unbox" class="half warn">Unpack this box</button></div>'}
+  else if(mode==='Build box'){h='<div id="boxui"></div>'}
+  else if(mode==='Stocktake'){h='<div id="stui"></div>'}
+  else if(mode==='Fix-ups'){h='<div id="fxui"></div>'}
+  o.innerHTML=h;
+  bindSeg('o_temp',v=>{sticky.temp=v});bindSeg('o_online',v=>{sticky.online=v});
+  const on=(id,k)=>{const e=$(id);if(e)e.oninput=e.onchange=()=>{sticky[k]=e.value}};
+  on('o_dest','dest');on('o_from','from');on('o_why','why');on('o_stype','stype');on('o_ref','ref');on('o_animal','animal');
+  if($('o_origin'))$('o_origin').oninput=()=>{sticky.origin=$('o_origin').value;const v=variantOf(sticky.origin);$('o_var').textContent=v.suffix?'Variant: '+v.name+(v.multi?' (origin matches more than one variant)':''):'Variant: Ellis Creek (default)'};
+  if(mode==='Pick')renderPick();if(mode==='Build box')renderBox();if(mode==='Stocktake')renderSt();if(mode==='Fix-ups')renderFix();if(mode==='Unpack')renderUnbox();
+  renderArea();
+}
+function renderArea(){
+  const a=$('modearea');
+  if(mode==='Sell'){
+    a.innerHTML='<ul class="list" id="items"></ul><div id="tot"></div><div class="row"><button id="price" class="half ghost">Change price</button><button id="rem" class="half ghost">Remove item</button></div><button id="save" class="go" style="width:100%">Save sale</button>';
+    $('price').onclick=changePrice;$('rem').onclick=removeItem;$('save').onclick=saveSale;
+    $('items').onclick=e=>{const li=e.target.closest('li');if(li){bsel=+li.dataset.i;renderBasket()}};renderBasket();
+  }else a.innerHTML='';
+}
+function setMode(m){
+  mode=m;$('note').value='';doneBox=null;
+  Array.prototype.forEach.call($('modes').children,b=>b.classList.toggle('on',b.textContent===m));
+  basket=[];bsel=-1;
+  $('cur').className='';$('cur').textContent=({IN:'Scan each new pack to put it into stock.',Pick:'Scan the pack you take for each order line.',Sell:'Scan items to build the sale.'})[m]||'Mode: '+m+'. Each scan is saved straight away.';
+  renderOpts();focusScan();
+}
+function setRole(r){
+  role=r;SV('role',r);buildModes();$('rolescreen').hidden=true;$('work').hidden=false;
+  const b=$('rolebtn');b.hidden=false;b.textContent='Role: '+r+' (change)';
+  setMode(MODES[r][0]);setSrc(localStorage.ecfbsrc==='bt'?'bt':'cam');
+}
+function buildModes(){
+  const bx=$('modes');bx.innerHTML='';
+  (MODES[role]||[]).forEach(m=>{const b=el('button',{type:'button'},esc(m));b.onclick=()=>setMode(m);bx.appendChild(b)});
+  bx.hidden=MODES[role].length<2;
+}
+function showRoles(){
+  if(running)stop();
+  $('work').hidden=true;$('rolescreen').hidden=false;$('rolebtn').hidden=true;
+  const r=$('roles');r.innerHTML='';
+  ROLES.forEach(x=>{const b=el('button',{type:'button'},esc(x.name)+'<small>'+esc(x.sub)+'</small>');b.onclick=()=>setRole(x.name);r.appendChild(b)});
+}
+
+/* ============================== recent scans and undo ============================== */
+function renderRecent(){
+  const u=$('recent');if(!u)return;
+  const list=recent.slice(-8).reverse();
+  u.innerHTML=list.map((r,i)=>'<li><div class="line"><div><b>'+esc(r.label)+'</b><div class="sub">'+hhmm(r.time)+' · '+(r.voided?'cancelled':(r.status==='sent'?'sent':'waiting to send'))+'</div>'+(r.warn?'<div class="w">⚠ '+esc(r.warn)+'</div>':'')+'</div>'+
+    (r.voided||r.noUndo?'':'<button class="sm ghost" data-u="'+(recent.length-1-i)+'">Undo</button>')+'</div></li>').join('')||'<li class="sub">Nothing yet.</li>';
+  Array.prototype.forEach.call(u.querySelectorAll('button[data-u]'),b=>b.onclick=()=>undo(+b.dataset.u));
+}
+async function undo(i){
+  const r=recent[i];if(!r||r.voided)return;
+  if(!await confirmD('Undo this scan?','<p>'+esc(r.label)+'</p><p>A cancelling entry is added. The original stays in the log.</p>','Undo'))return;
+  const evs=r.ids.map(id=>mkEvent('Void','',{linked:id,note:'Undo: '+r.label}));
+  r.voided=true;evs.forEach(e=>queue.push(e));
+  recent.push({ids:evs.map(e=>e.id),label:'Undo: '+r.label,time:nowIso(),status:'queued',warn:'',voided:false,noUndo:true});
+  saveQ();renderRecent();flush();
+}
+
+/* ============================== result card ============================== */
+function showCard(cls,html){const c=$('cur');c.className=cls;c.innerHTML=html}
+function stockLine(a,temp){
+  const i=stockInfo(a,temp);if(!i)return'';
+  return'<div class="mut">'+esc(a.key||'')+' · online '+i.online+' · open orders '+i.claims+' · spare '+i.spare+'</div>';
+}
+function packHtml(pr,a,extra,tags){
+  const t=(tags||[]).map(x=>'<span class="tag '+(x[1]||'')+'">'+esc(x[0])+'</span>').join('');
+  const w=pr.kg!==''?(pr.kg<=0.0011?'':pr.kg.toFixed(3)+' kg · '):'';
+  return'<div class="big">'+esc(labelOf(pr,a))+'</div><div class="mut">'+w+(pr.price!==''?'$'+Number(pr.price).toFixed(2)+' · ':'')+(pr.kind==='gs1'?'new label':'old label')+(pr.packed?' · packed '+pr.packed:'')+(pr.best?' · best before '+pr.best:'')+'</div>'+(extra||'')+'<div>'+t+'</div>';
+}
+function dupCheck(pr,a,type){
+  if(pr.kind!=='ean13'||!a.p)return false;
+  const s=S(),ex=(s.dupCat||[]).indexOf((a.p.type||'').toLowerCase())>=0||(s.dupType||[]).indexOf((a.p.category||'').toLowerCase())>=0;
+  const now=Date.now(),win=(s.dupSeconds||60)*1000;
+  const hit=scanLog.slice(-3).some(x=>x.code===pr.code&&x.type===type&&now-x.t<=win);
+  scanLog.push({code:pr.code,type,t:now});scanLog=scanLog.slice(-10);
+  return hit&&!ex;
+}
+
+/* ============================== scan handling ============================== */
+function scanBad(t,why){
+  badTone();showCard('bad','<div class="big">Not a valid pack barcode</div><div class="mut">'+esc(why||'')+'</div><b>'+esc(t||'(empty)')+'</b>');
+}
+async function onScan(raw,pre){
+  if(modalOpen||!mode)return;
+  const pr=pre||parseScan(raw);
+  if(pr.err&&!(mode==='Build box'&&boxB&&boxB.awaiting))return scanBad(pr.raw,pr.err);
+  if(mode==='Build box'&&boxB&&boxB.awaiting&&pr.kind!=='none')return doBoxLabel(pr);
+  const known=pr.kind!=='none'?findBoxByScan(pr.code||pr.raw):null;
+  if(known){pr.kind='box';pr.boxRec=known;pr.code=known.id}
+  if(pr.kind==='none'||pr.kind==='other')return scanBad(pr.raw,'Only pack labels and box labels are accepted.');
+  try{
+    if(mode==='IN')return await doIn(pr);
+    if(mode==='Pick')return await doPick(pr);
+    if(mode==='Sell')return doBasket(pr);
+    if(mode==='Build box')return doBoxScan(pr);
+    if(mode==='Stocktake')return doStScan(pr);
+    if(mode==='Unpack')return await doUnpackScan(pr);
+    if(mode==='Fix-ups'){return scanBad(pr.raw,'Fix-ups work from the stock list below, not by scanning.')}
+    return await doSimple(pr);
+  }catch(e){badTone();showCard('bad','Error: '+esc(e.message))}
+}
+/* IN */
+async function doIn(pr){
+  if(pr.kind==='box')return scanBad(pr.raw,'A box cannot be packed in. Use Manage Stock > Unpack.');
+  const origin=($('o_origin')?$('o_origin').value:sticky.origin).trim(),v=variantOf(origin),a=analyse(pr,sticky.temp,v.suffix);
+  const ev=mkEvent('Pack',pr.code,{online:sticky.online,temperature:sticky.temp,farmOrigin:origin,animalCode:($('o_animal')?$('o_animal').value:sticky.animal).trim()});
+  const tags=[[sticky.temp,'']],warn=[];
+  tags.push([sticky.online==='Offline'?'Offline only':(a.under&&sticky.online!=='Online'&&S().underpricedOffline!==false?'Offline only (underpriced)':'Online'),a.under?'amber':'green']);
+  if(a.under)tags.push(['UNDERPRICED','amber']);if(v.suffix)tags.push([v.name,'']);
+  a.flags.forEach(f=>{tags.push([f,'amber']);warn.push(f)});
+  if(dupCheck(pr,a,'Pack')){tags.push(['Possible double scan','amber']);warn.push('double')}
+  enqueue([ev],'IN '+labelOf(pr,a));
+  (warn.length||a.under)?warnTone():okTone();
+  showCard(warn.length||a.under?'hold':'ok',packHtml(pr,a,'<div class="mut">Band '+(a.band===''?'?':a.band+' g')+' · '+esc(a.key)+'</div>',tags)+(warn.indexOf('double')>=0?'<button class="sm warn" id="undonow">Undo this scan</button>':''));
+  if($('undonow'))$('undonow').onclick=()=>undo(recent.length-1);
+}
+/* simple actions on a pack or box */
+const SIMPLE={Out:'Out',Return:'Return',Freeze:'Freeze',Thaw:'Thaw','Allocate online':'Online','Remove online':'Offline','Write-off':'Writeoff'};
+function simpleFields(){
+  const t={};
+  if(mode==='Out'){t.type2=($('o_dest')||{}).value||sticky.dest;t.reference=($('o_ref')?$('o_ref').value:sticky.ref).trim()}
+  if(mode==='Return'){t.type2=($('o_from')||{}).value||sticky.from;t.online=sticky.online}
+  if(mode==='Write-off')t.type2=($('o_why')||{}).value||sticky.why;
+  return t;
+}
+async function doSimple(pr){
+  const type=SIMPLE[mode],f=simpleFields();
+  if(pr.kind==='box')return await doBoxAction(pr,type,f);
+  const temp=tempFor(pr,mode),a=analyse(pr,temp||'Chilled',''),info=stockInfo(a,temp||'Chilled'),warn=[];
+  if(REMOVES[type]&&!await shortGate([{name:labelOf(pr,a),info}]))return showCard('hold','Cancelled. Nothing was saved.');
+  const ev=mkEvent(type,pr.code,Object.assign({temperature:type==='Freeze'?'Frozen':(type==='Thaw'?'Chilled':temp)},f));
+  const tags=[[mode+(f.type2?': '+f.type2:''),'green']];
+  if(temp)tags.push([temp,'']);
+  a.flags.forEach(x=>{tags.push([x,'amber']);warn.push(x)});
+  if(dupCheck(pr,a,type)){tags.push(['Possible double scan','amber']);warn.push('double')}
+  enqueue([ev],mode+(f.type2?' ('+f.type2+')':'')+' '+labelOf(pr,a));
+  if(REMOVES[type])localTake(a,temp||'Chilled');
+  warn.length?warnTone():okTone();
+  showCard(warn.length?'hold':'ok',packHtml(pr,a,stockLine(a,temp||'Chilled'),tags)+(warn.indexOf('double')>=0?'<button class="sm warn" id="undonow">Undo this scan</button>':''));
+  if($('undonow'))$('undonow').onclick=()=>undo(recent.length-1);
+}
+/* boxes: the box label (barcode) is made on the weigh scales and scanned in when the box is finished. Its barcode is the box ID. */
+const allBoxes=()=>{const seen={},out=[];((ref&&ref.boxes)||[]).concat(LS('localBoxes',[])).forEach(b=>{if(!seen[b.id]){seen[b.id]=1;out.push(b)}});return out};
+const findBox=id=>allBoxes().find(b=>b.id===id)||null;
+const findBoxByScan=code=>allBoxes().find(b=>b.id===code||b.id.indexOf(code+'#')===0)||null;   // several boxes can share one label code: any of them will do
+const boxRef=b=>'BOX:'+b.id;
+const BOX_VERB={Out:'sent out',Writeoff:'written off',Return:'returned',Freeze:'frozen',Thaw:'thawed'};
+function setBoxTemp(b,temp){
+  const fix=l=>l.forEach(x=>{if(x.id===b.id){x.temp=temp;(x.packs||[]).forEach(p=>{if(p.key)p.key=p.key.replace(/-[CF]$/,temp==='Frozen'?'-F':'-C')})}});
+  if(ref&&ref.boxes){fix(ref.boxes);SV('ref',ref)}
+  const lb=LS('localBoxes',[]);fix(lb);SV('localBoxes',lb);
+}
+async function doBoxAction(pr,type,f){
+  const b=pr.boxRec||findBox(pr.code);
+  if(!b)return scanBad(pr.code,'This box is not in the data on this phone. Refresh the data (Settings > Save and connect) and try again.');
+  if(['Online','Offline'].indexOf(type)>=0)return scanBad(pr.code,'Boxes are not put online or taken offline here.');
+  if(type==='Freeze'&&b.temp==='Frozen')return scanBad(pr.code,'This box is already frozen.');
+  if(type==='Thaw'&&b.temp==='Chilled')return scanBad(pr.code,'This box is already chilled.');
+  if(!b.packs.length)return scanBad(pr.code,'This box has no packs recorded.');
+  if(!await confirmD(mode+' box '+b.id,'<p>'+b.packs.length+' packs ('+esc(b.type||'box')+', '+esc(b.temp||'')+') will be '+BOX_VERB[type]+'.</p>',mode))return;
+  const t=type==='Freeze'?'Frozen':type==='Thaw'?'Chilled':b.temp;
+  const evs=b.packs.map(p=>mkEvent(type,p.barcode,Object.assign({},f,{reference:boxRef(b),temperature:t})));
+  enqueue(evs,mode+' box '+b.id+' ('+b.packs.length+' packs)');
+  if(type==='Freeze'||type==='Thaw')setBoxTemp(b,t);
+  okTone();
+  showCard('ok','<div class="big">Box '+esc(b.id)+'</div><div class="mut">'+b.packs.length+' packs · '+esc(mode)+(f.type2?' · '+esc(f.type2):'')+(t?' · now '+esc(t.toLowerCase()):'')+'</div>');
+}
+function boxTypes(){const s={};allBoxes().forEach(b=>{if(b.type)s[b.type]=1});return Object.keys(s)}
+const SRC_SEG=(id,label,val)=>'<label class="f">'+label+'</label>'+seg(id,[{v:'Chilled',t:'Chilled'},{v:'Frozen',t:'Frozen'}],val);
+function renderBox(){
+  const u=$('boxui');if(!u)return;
+  if(doneBox){
+    u.innerHTML='<div class="big" style="font-weight:700">Box saved</div><div class="mut" style="font-size:.9rem;color:var(--steel)">'+esc(doneBox.id)+'<br>'+doneBox.packs.length+' packs · '+esc(doneBox.type)+' · '+esc(doneBox.temp)+'</div><button id="bnew" class="go" style="width:100%;margin-top:8px">Build another box</button>';
+    $('bnew').onclick=()=>{doneBox=null;renderBox()};return;
+  }
+  if(!boxB){
+    u.innerHTML='<label class="f" for="b_type">Box type (free text until the box types are decided)</label><input type="text" id="b_type" list="b_types" value="'+esc(sticky.boxType||'')+'"><datalist id="b_types">'+boxTypes().map(t=>'<option value="'+esc(t)+'">').join('')+'</datalist>'+
+      SRC_SEG('b_dst','Box will be stored',sticky.boxTemp||'Chilled')+'<div class="mut" style="font-size:.8rem;color:var(--steel);margin-top:4px">Packs of either temperature can go in. If a pack differs from the box, it is frozen or thawed as it goes in.</div><button id="b_start" class="go" style="width:100%;margin-top:8px">Start a new box</button>';
+    bindSeg('b_dst',v=>{sticky.boxTemp=v});
+    $('b_start').onclick=()=>{const t=$('b_type').value.trim();if(!t)return dlg('Box type needed','<p>Type the box type first.</p>');sticky.boxType=t;boxB={type:t,temp:sticky.boxTemp||'Chilled',packs:[],awaiting:false};renderBox()};
+    return;
+  }
+  if(boxB.awaiting){
+    u.innerHTML='<div class="big" style="font-weight:700">Scan the box label now</div><div class="mut" style="font-size:.9rem;color:var(--steel)">Print the box label on the weigh scales, then scan it here. '+boxB.packs.length+' packs · '+esc(boxB.type)+' · '+esc(boxB.temp)+'.</div>'+
+      '<label class="f" for="b_code">Or type the label number</label><div class="row" style="margin-top:0"><input type="text" id="b_code" class="half" autocomplete="off"><button id="b_use" class="ghost">Use</button></div><button id="b_back" class="ghost" style="width:100%">Back to the pack list</button>';
+    $('b_use').onclick=()=>{const c=$('b_code').value.trim();if(c)onScan(c)};$('b_back').onclick=()=>{boxB.awaiting=false;renderBox()};return;
+  }
+  u.innerHTML='<div class="line"><b>New '+esc(boxB.type)+' box</b><span class="tag">to '+esc(boxB.temp)+'</span></div>'+SRC_SEG('o_temp','Packs being scanned are currently',sticky.temp)+
+    '<ul class="list">'+(boxB.packs.map((p,i)=>'<li><div class="line"><span>'+(i+1)+'. '+esc(p.label)+' <span class="tag">'+esc(p.src)+(p.src!==boxB.temp?' → '+esc(boxB.temp):'')+'</span></span><button class="sm ghost" data-r="'+i+'">Remove</button></div></li>').join('')||'<li class="sub">Scan each pack going into this box.</li>')+'</ul><div class="row"><button id="b_cancel" class="half ghost">Cancel box</button><button id="b_done" class="half go">Finish box ('+boxB.packs.length+')</button></div>';
+  bindSeg('o_temp',v=>{sticky.temp=v});
+  Array.prototype.forEach.call(u.querySelectorAll('button[data-r]'),b=>b.onclick=()=>{boxB.packs.splice(+b.dataset.r,1);renderBox()});
+  $('b_cancel').onclick=async()=>{if(await confirmD('Cancel this box?','<p>The scanned packs are not changed.</p>','Cancel box')){boxB=null;renderBox()}};
+  $('b_done').onclick=()=>{if(!boxB.packs.length)return dlg('Empty box','<p>Scan at least one pack.</p>');boxB.awaiting=true;renderBox();focusScan()};
+}
+function doBoxScan(pr){
+  if(pr.kind==='box')return scanBad(pr.code,'Scan packs into the box, not another box.');
+  if(!boxB)return scanBad(pr.raw,'Start a new box first.');
+  if(boxB.awaiting)return doBoxLabel(pr);
+  if(boxB.packs.some(p=>p.code===pr.code&&pr.kind==='gs1'))return scanBad(pr.raw,'That pack is already in this box.');
+  const a=analyse(pr,sticky.temp,'');
+  boxB.packs.push({code:pr.code,pr,label:labelOf(pr,a),key:a.key,src:sticky.temp});okTone();
+  showCard('ok',packHtml(pr,a,'',[['In the box','green']]));renderBox();
+}
+async function doBoxLabel(pr){
+  const code=pr.code||pr.raw;
+  if(boxB.packs.some(p=>p.code===code))return scanBad(pr.raw,'That is a pack label. Scan the box label made on the scales.');
+  let id=code;const same=allBoxes().filter(b=>b.id===code||b.id.indexOf(code+'#')===0);
+  if(same.length){
+    warnTone();
+    if(!await confirmD('Label already used','<p>A box with this label number is already in stock ('+same.length+'). If your scales print the same label for every box of one type, this is normal. Use it for this box too?</p>','Use it too'))return;
+    id=code+'#'+(same.length+1);
+  }
+  const b={id,type:boxB.type,temp:boxB.temp,price:pr.kind==='ean13'&&pr.price!==''?pr.price:'',packs:boxB.packs,label:code};
+  if(!await confirmD('Finish this box?','<p>Label <b>'+esc(code)+'</b><br>'+b.packs.length+' packs go into this '+esc(b.type)+' box ('+esc(b.temp)+')'+(b.packs.some(p=>p.src!==b.temp)?'. Packs at the other temperature are '+(b.temp==='Frozen'?'frozen':'thawed')+' as they go in':'')+'.</p>','Finish box'))return;
+  const evs=[],tc=b.temp==='Frozen'?'Freeze':'Thaw';
+  b.packs.forEach(p=>{if(p.src!==b.temp)evs.push(mkEvent(tc,p.code,{temperature:b.temp}))});
+  b.packs.forEach(p=>evs.push(mkEvent('Box',p.code,{reference:boxRef(b),note:b.type,temperature:b.temp})));
+  enqueue(evs,'Box '+id+' ('+b.packs.length+' packs)');
+  const lb=LS('localBoxes',[]);lb.push({id,type:b.type,temp:b.temp,price:b.price,location:'Offline',packs:b.packs.map(p=>({barcode:p.code,key:p.key.replace(/-[CF]$/,b.temp==='Frozen'?'-F':'-C'),name:p.label}))});SV('localBoxes',lb.slice(-50));
+  doneBox=b;boxB=null;okTone();renderBox();
+  showCard('ok','<div class="big">Box saved</div><div class="mut">'+esc(id)+' · '+b.packs.length+' packs</div>');
+}
+function renderUnbox(){
+  const s=$('o_box');if(!s)return;
+  s.innerHTML='<option value="">Choose a box…</option>'+allBoxes().map(b=>'<option value="'+esc(b.id)+'">'+esc(b.id)+' · '+esc(b.type||'')+' · '+esc(b.temp||'')+' · '+b.packs.length+' packs</option>').join('');
+  $('o_unbox').onclick=()=>{if($('o_box').value)unpackBox(findBox($('o_box').value))};
+}
+async function unpackBox(b){
+  if(!b)return scanBad('','This box is not in the data on this phone.');
+  if(!await confirmD('Unpack box '+b.id+'?','<p>'+b.packs.length+' packs go back into stock (offline, '+esc((b.temp||'').toLowerCase())+').</p>','Unpack'))return;
+  const evs=b.packs.map(p=>mkEvent('Unbox',p.barcode,{reference:boxRef(b),online:'Offline',temperature:b.temp}));
+  enqueue(evs,'Unpack box '+b.id+' ('+b.packs.length+' packs)');
+  const lb=LS('localBoxes',[]).filter(x=>x.id!==b.id);SV('localBoxes',lb);
+  if(ref&&ref.boxes){ref.boxes=ref.boxes.filter(x=>x.id!==b.id);SV('ref',ref)}
+  okTone();showCard('ok','<div class="big">Box '+esc(b.id)+' unpacked</div><div class="mut">'+b.packs.length+' packs back in stock</div>');renderUnbox();
+}
+async function doUnpackScan(pr){
+  if(pr.kind==='box')return unpackBox(pr.boxRec||findBox(pr.code));
+  const a=analyse(pr,sticky.temp,''),box=allBoxes().find(b=>b.packs.some(p=>p.barcode===pr.code));
+  const ev=mkEvent('Unbox',pr.code,{reference:box?boxRef(box):'',online:'Offline',temperature:tempFor(pr,mode)||(box?box.temp:'')});
+  enqueue([ev],'Unpack '+labelOf(pr,a));okTone();showCard('ok',packHtml(pr,a,'',[['Unpacked'+(box?' from '+box.id:''),'green']]));
+}
+/* Selling basket */
+function doBasket(pr){
+  if(pr.kind==='box'){
+    const b=pr.boxRec||findBox(pr.code);if(!b)return scanBad(pr.code,'This box is not in the data on this phone.');
+    if(basket.some(x=>x.box&&x.box.id===b.id))return scanBad(pr.code,'That box is already in the sale.');
+    basket.push({box:b,pr,sell:b.price!==''&&b.price!=null?Number(b.price).toFixed(2):(pr.kind==='ean13'&&pr.price!==''?Number(pr.price).toFixed(2):'')});bsel=basket.length-1;okTone();showCard('ok','<div class="big">Box '+esc(b.id)+'</div><div class="mut">'+b.packs.length+' packs · set the box price with Change price</div>');renderBasket();return;
+  }
+  const temp=tempFor(pr,mode),a=analyse(pr,temp||'Chilled',''),info=stockInfo(a,temp||'Chilled'),warn=[];
+  if(pr.kind==='gs1'&&basket.some(x=>x.pr.code===pr.code))return scanBad(pr.code,'That pack is already in the sale.');
+  basket.push({pr,a,temp,sell:pr.price===''?'':Number(pr.price).toFixed(2)});bsel=basket.length-1;
+  const tags=[[temp||'by label','']];a.flags.forEach(x=>{tags.push([x,'amber']);warn.push(x)});
+  if(dupCheck(pr,a,'Sell')){tags.push(['Possible double scan','amber']);warn.push('d')}
+  warn.length?warnTone():okTone();
+  showCard(warn.length?'hold':'ok',packHtml(pr,a,stockLine(a,temp||'Chilled'),tags));renderBasket();
+}
+function renderBasket(){
+  const u=$('items');if(!u)return;
+  u.innerHTML=basket.map((x,i)=>'<li data-i="'+i+'"'+(i===bsel?' class="sel"':'')+'>'+(i+1)+'. '+(x.box?'Box '+esc(x.box.id)+' · '+x.box.packs.length+' packs':esc(labelOf(x.pr,x.a))+' · '+(x.pr.kg!==''&&x.pr.kg>0.0011?x.pr.kg.toFixed(3)+' kg · ':''))+(x.sell!==''?'$'+x.sell:'<b>no price</b>')+'</li>').join('');
+  const p=basket.reduce((a,x)=>a+(+x.sell||0),0),k=basket.reduce((a,x)=>a+(x.pr.kg>0.0011?+x.pr.kg:0),0);
+  $('tot').textContent=basket.length+' items · '+k.toFixed(2)+' kg · $'+p.toFixed(2);
+}
+async function changePrice(){
+  if(bsel<0)return;const v=await askNum('Selling price','Price for this item ($)',basket[bsel].sell);
+  if(v!==null){basket[bsel].sell=(+v).toFixed(2);renderBasket()}
+}
+async function removeItem(){if(bsel>=0&&await confirmD('Remove item','<p>Remove the selected item from the sale?</p>','Remove')){basket.splice(bsel,1);bsel=basket.length-1;renderBasket()}}
+async function saveSale(){
+  if(!basket.length)return dlg('Nothing to save','<p>Scan some items first.</p>');
+  const stype=($('o_stype')||{}).value||sticky.stype,ref0=($('o_ref')?$('o_ref').value:sticky.ref).trim();
+  if(basket.some(x=>x.box&&x.sell===''))return dlg('Box price needed','<p>Set a price for each box (Change price).</p>');
+  const need={};basket.forEach(x=>{if(x.box)return;const k=x.a.key+'|'+x.temp;(need[k]=need[k]||{n:0,a:x.a,t:x.temp,name:labelOf(x.pr,x.a)}).n++});
+  const gate=Object.keys(need).map(k=>{const i=stockInfo(need[k].a,need[k].t||'Chilled');return{name:need[k].name,info:i&&Object.assign({},i,{spare:i.spare-need[k].n+1})}});
+  const tot=basket.reduce((a,x)=>a+(+x.sell||0),0);
+  if(!await confirmD('Save this sale?','<p>'+basket.length+' items · $'+tot.toFixed(2)+'<br>'+esc(stype)+(ref0?' · '+esc(ref0):'')+'</p>','Save sale'))return;
+  if(!await shortGate(gate))return;
+  const evs=[];
+  basket.forEach(x=>{
+    if(x.box)x.box.packs.forEach((p,i)=>evs.push(mkEvent('Sell',p.barcode,{type2:stype,salePrice:i===0?x.sell:'',reference:boxRef(x.box),temperature:x.box.temp})));
+    else evs.push(mkEvent('Sell',x.pr.code,{type2:stype,salePrice:x.sell,reference:ref0,temperature:x.temp}));
+  });
+  enqueue(evs,'Sale: '+basket.length+' items · $'+tot.toFixed(2)+' · '+stype);
+  basket.forEach(x=>{if(!x.box)localTake(x.a,x.temp||'Chilled')});
+  basket=[];bsel=-1;$('note').value='';renderBasket();okTone();showCard('ok','<div class="big">Sale saved</div><div class="mut">'+evs.length+' scans</div>');
+}
+/* Pick list */
+const noVar=k=>String(k).replace(/-[A-Z][A-Z0-9]*(?=-\d+-[CF]$)/,'');
+function renderPick(){
+  const d=$('picklist');if(!d)return;const pl=(ref&&ref.pickList)||[];
+  if(!pl.length){d.innerHTML='<div class="sub">No open orders in the data on this phone'+(ref&&ref.fetched?' (data from '+hhmm(ref.fetched)+')':'')+'.</div>';return}
+  const by={};pl.forEach(l=>{(by[l.order]=by[l.order]||[]).push(l)});
+  d.innerHTML=Object.keys(by).map(o=>'<div class="sec" style="margin:8px 0 2px">Order '+esc(o)+'</div>'+by[o].map(l=>{
+    const q=+l.qty||0,p=Math.min(q,+l.picked||0);
+    return'<div class="card" style="margin:4px 0"><div class="line"><b>'+esc(l.product||nameOfKey(l.key))+'</b><span>'+p+' / '+q+'</span></div><div class="mut" style="font-size:.8rem;color:var(--steel)">'+esc(l.key)+' · '+(/-F$/.test(l.key)?'Freezer':'Chiller')+'</div><div class="prog"><i style="width:'+(q?p/q*100:0)+'%"></i></div></div>'}).join('')).join('');
+}
+async function doPick(pr){
+  if(pr.kind==='box')return scanBad(pr.code,'Box lines are not on the pick list yet.');
+  const pl=(ref&&ref.pickList)||[];
+  const cands=['C','F'].map(t=>({t,a:analyse(pr,t,'')}));
+  let hit=null;
+  for(const c of cands){hit=pl.find(l=>(+l.qty||0)>(+l.picked||0)&&noVar(l.key)===c.a.key);if(hit){hit.a=c.a;hit.t=c.t;break}}
+  if(!hit){
+    warnTone();const a=cands[0].a;
+    showCard('hold',packHtml(pr,a,'<div class="mut">This pack is not on any open order line (or the line is already full).</div>',[['Not on the pick list','amber']]));
+    if(!await confirmD('Not on the pick list','<p>'+esc(labelOf(pr,a))+' does not match an open order line. Log it as a web order sale anyway?</p>','Log anyway'))return;
+    const ev=mkEvent('Sell',pr.code,{type2:'Web order',temperature:tempFor(pr,mode)});enqueue([ev],'Web order (no line) '+labelOf(pr,a));okTone();return;
+  }
+  const a=hit.a,vm=/-([A-Z][A-Z0-9]*)-\d+-[CF]$/.exec(hit.key);
+  if(!await shortGate([{name:labelOf(pr,a),info:stockInfo(a,hit.t)}]))return;
+  const ev=mkEvent('Sell',pr.code,{type2:'Web order',reference:hit.order,temperature:hit.t==='F'?'Frozen':'Chilled',variant:vm?vm[1]:''});
+  hit.picked=(+hit.picked||0)+1;SV('ref',ref);
+  enqueue([ev],'Order '+hit.order+' · '+labelOf(pr,a));okTone();
+  showCard('ok',packHtml(pr,a,'<div class="mut">Order '+esc(hit.order)+' · '+hit.picked+' of '+hit.qty+' picked</div>',[['Order '+hit.order,'green']]));renderPick();
+}
+/* Stocktake */
+function renderSt(){
+  const u=$('stui');if(!u)return;
+  if(!st){
+    u.innerHTML='<label class="f">Location being counted</label>'+sel('st_loc',ST_LOCS,sticky.stloc||'Chiller')+TEMP_SEG()+'<button id="st_go" class="go" style="width:100%;margin-top:8px">Start stocktake session</button><div class="mut" style="font-size:.8rem;color:var(--steel);margin-top:6px">Scans in a stocktake are only counted. They do not change stock.</div>';
+    bindSeg('o_temp',v=>{sticky.temp=v});
+    $('st_go').onclick=()=>{sticky.stloc=$('st_loc').value;st={id:'ST-'+ymdhms().slice(0,6)+'-'+ymdhms().slice(7,11)+'-'+slug().slice(0,3).toUpperCase(),loc:sticky.stloc,temp:sticky.temp,counts:{},n:0};renderSt()};return;
+  }
+  const rows=Object.keys(st.counts).sort().map(k=>'<li><div class="line"><span>'+esc(st.counts[k].name)+'</span><b>'+st.counts[k].n+'</b></div></li>').join('');
+  u.innerHTML='<div class="line"><b>Session '+esc(st.id)+'</b><span class="tag">'+esc(st.loc)+' · '+esc(st.temp)+'</span></div><div class="tot" style="font-weight:600">'+st.n+' packs counted</div><ul class="list">'+(rows||'<li class="sub">Scan every pack in the '+esc(st.loc.toLowerCase())+'.</li>')+'</ul><div class="row"><button id="st_done" class="go half">Complete session</button><button id="st_x" class="ghost half">Abandon</button></div>';
+  $('st_done').onclick=async()=>{
+    if(!await confirmD('Complete stocktake?','<p>'+st.n+' packs counted in the '+esc(st.loc.toLowerCase())+'. Only completed sessions raise Missing flags. Compare it in the Sheet (ECF Stock > Compare stocktake) with the session name <b>'+esc(st.id)+'</b>.</p>','Complete'))return;
+    enqueue([mkEvent('Stocktake','',{reference:st.id,location:st.loc,temperature:st.temp,note:'COMPLETE'})],'Stocktake '+st.id+' complete ('+st.n+' packs)',{noUndo:true});
+    st=null;renderSt();okTone();
+  };
+  $('st_x').onclick=async()=>{if(await confirmD('Abandon this session?','<p>The packs already scanned stay in the log but the session is not marked complete.</p>','Abandon')){st=null;renderSt()}};
+}
+function doStScan(pr){
+  if(!st)return scanBad(pr.raw,'Start a stocktake session first.');
+  if(pr.kind==='box')return scanBad(pr.code,'Scan the packs, not boxes.');
+  const a=analyse(pr,st.temp,'');
+  enqueue([mkEvent('Stocktake',pr.code,{reference:st.id,location:st.loc,temperature:st.temp})],'Stocktake '+labelOf(pr,a),{noUndo:false});
+  const k=a.key||pr.plu;(st.counts[k]=st.counts[k]||{name:labelOf(pr,a),n:0}).n++;st.n++;okTone();
+  showCard('ok',packHtml(pr,a,'<div class="mut">Counted: '+st.n+' in this session</div>',[['Stocktake '+st.id,'green']]));renderSt();
+}
+/* Fix-ups: missing, found, adjust */
+let fxq='';
+function fxList(){
+  const q=fxq.trim().toLowerCase(),all=((ref&&ref.stock)||[]).map(s=>({key:s.key,inStock:s.inStock,name:nameOfKey(s.key)}));
+  return all.filter(x=>!q||(x.name+' '+x.key).toLowerCase().indexOf(q)>=0).sort((a,b)=>a.name.localeCompare(b.name)).slice(0,60);
+}
+function renderFix(){
+  const u=$('fxui');if(!u)return;
+  u.innerHTML='<div class="sub" style="font-size:.85rem;color:var(--steel)">Fix stock counts that have no barcode to scan. Each one asks for confirmation.</div><input type="text" id="fx_q" placeholder="Search product or PLU" value="'+esc(fxq)+'"><label class="f" for="fx_key">Stock line</label><select id="fx_key" size="6" style="height:150px"></select>'+
+   '<div class="row"><div class="half"><label class="f" for="fx_n">Quantity</label><input type="number" id="fx_n" inputmode="numeric" value="1"></div><div class="half"><label class="f" for="fx_pool">Pool (Adjust and Found)</label><select id="fx_pool"><option>Offline</option><option>Online</option></select></div></div>'+
+   '<label class="f" for="fx_why">Reason (for Adjust)</label><input type="text" id="fx_why"><div class="row"><button id="fx_miss" class="half warn">Mark missing</button><button id="fx_found" class="half ghost">Found</button><button id="fx_adj" class="half ghost">Adjust ±</button></div>';
+  const fill=()=>{$('fx_key').innerHTML=fxList().map(x=>'<option value="'+esc(x.key)+'">'+esc(x.name)+' · in stock '+x.inStock+'</option>').join('')||'<option disabled>No stock data on this phone</option>'};
+  fill();$('fx_q').oninput=()=>{fxq=$('fx_q').value;fill()};
+  const go=async(type)=>{
+    const key=$('fx_key').value,n=Math.floor(+$('fx_n').value);if(!key)return dlg('Choose a line','<p>Select a stock line first.</p>');
+    if(!n||(type!=='Adjust'&&n<0))return dlg('Quantity','<p>Enter a whole number'+(type==='Adjust'?' (use a minus sign to remove)':' above zero')+'.</p>');
+    const nm=nameOfKey(key),pool=$('fx_pool').value,why=$('fx_why').value.trim();
+    const txt=type==='Missing'?'Write off '+n+' × '+nm+' as Missing?':type==='Found'?'Put '+n+' × '+nm+' back into stock ('+pool.toLowerCase()+')?':(n>0?'Add ':'Remove ')+Math.abs(n)+' × '+nm+' ('+pool.toLowerCase()+')'+(why?' because: '+why:'')+'?';
+    if(type==='Adjust'&&!why)return dlg('Reason needed','<p>Type a reason for the adjustment.</p>');
+    if(!await confirmD(type==='Missing'?'Mark missing':type,'<p>'+esc(txt)+'</p>',type==='Missing'?'Write off':'Confirm'))return;
+    const ev=mkEvent(type,'',{stockKey:key,qty:type==='Adjust'?n:Math.abs(n),online:type==='Missing'?'':pool,reference:type==='Missing'?'Missing':'',note:type==='Adjust'?why:$('note').value.trim()});
+    enqueue([ev],txt.replace('?',''));okTone();showCard('ok','<div class="big">'+esc(type)+'</div><div class="mut">'+esc(txt)+'</div>');
+  };
+  $('fx_miss').onclick=()=>go('Missing');$('fx_found').onclick=()=>go('Found');$('fx_adj').onclick=()=>go('Adjust');
+}
+
+/* ============================== camera and detection ============================== */
+const v=$('v'),o=$('o'),ctx=o.getContext('2d'),cv=document.createElement('canvas'),cx=cv.getContext('2d');
+let stream,track,running=false,det,zx,lastTick=0,lastActive=0,lastCap='',lastCapSeen=0,seen=null,seenN=0,cand=null,torchOn=false;
+const msg=t=>$('msg').textContent=t;
+function capture(raw){lastCap=raw;lastCapSeen=performance.now();onScan(raw)}
+async function loadZX(){
+  if(window.ZXing)return;
+  await new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js';s.onload=ok;s.onerror=no;document.head.appendChild(s)});
+}
+async function initDetector(){
+  if(det||zx)return;
+  if('BarcodeDetector' in window){det=new BarcodeDetector();$('info').textContent='Decoder: built-in browser detector';return}
+  await loadZX();zx=new ZXing.MultiFormatReader();zx.setHints(new Map([[ZXing.DecodeHintType.TRY_HARDER,true]]));
+  $('info').textContent='Decoder: ZXing fallback (slower)';
+}
+async function detect(){
+  if(det){const r=await det.detect(v);return r.map(b=>({raw:b.rawValue,pts:b.cornerPoints.map(p=>[p.x,p.y])}))}
+  const w=640,h=Math.round(w*v.videoHeight/v.videoWidth);cv.width=w;cv.height=h;cx.drawImage(v,0,0,w,h);
+  try{const r=zx.decode(new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.HTMLCanvasElementLuminanceSource(cv)))),k=v.videoWidth/w;
+    return[{raw:r.getText(),pts:r.getResultPoints().map(p=>[p.getX()*k,p.getY()*k])}]}catch(e){return[]}
+}
+function draw(list){
+  o.width=o.clientWidth;o.height=o.clientHeight;ctx.clearRect(0,0,o.width,o.height);
+  const vw=v.videoWidth,vh=v.videoHeight,s=Math.max(o.width/vw,o.height/vh),dx=(o.width-vw*s)/2,dy=(o.height-vh*s)/2;
+  for(const it of list){
+    let p=it.pts.map(([x,y])=>[x*s+dx,y*s+dy]);
+    if(p.length<4){const xs=p.map(a=>a[0]),ys=p.map(a=>a[1]),a=Math.min(...xs)-14,b=Math.min(...ys)-30,c=Math.max(...xs)+14,d=Math.max(...ys)+30;p=[[a,b],[c,b],[c,d],[a,d]]}
+    ctx.beginPath();p.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.lineWidth=6;ctx.lineJoin='round';ctx.strokeStyle=it.color;ctx.stroke();
+  }
+}
+function handle(list,now){
+  const auto=$('auto').value==='1',strict=$('dup').value==='strict';
+  cand=null;let blocked=false;
+  for(const it of list){
+    cand=cand||it.raw;
+    const dup=it.raw===lastCap&&(strict||now-lastCapSeen<REARM);
+    if(it.raw===lastCap)lastCapSeen=now;
+    it.color=(auto&&dup)?HOLD:GO;if(auto&&dup)blocked=true;
+  }
+  if(list.length)lastActive=now;
+  if(cand&&cand===seen)seenN++;else{seen=cand;seenN=cand?1:0}
+  $('cap').disabled=auto||!cand;$('cap').classList.toggle('ready',!auto&&!!cand);
+  $('cap').textContent=auto?'Capture (auto scan is on)':'Capture';
+  if(auto&&cand&&!blocked&&seenN>=2)capture(cand);
+  draw(list);
+}
+async function tick(){
+  if(!running)return;const now=performance.now();
+  if(now-lastTick>90&&v.readyState>=2){lastTick=now;let l=[];try{l=await detect()}catch(e){}handle(l,now)}
+  const left=IDLE-(now-lastActive);
+  if(left<=0)return stop('Camera paused after 60 s idle. Tap Enable camera.');
+  msg(left<15000?'Camera sleeps in '+Math.ceil(left/1000)+' s':'Camera on · sleeps after 60 s idle');
+  requestAnimationFrame(tick);
+}
+async function start(){
+  audio();
+  try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false})}
+  catch(e){return msg('Camera unavailable: '+e.name+'. Open this page over HTTPS.')}
+  v.srcObject=stream;await v.play();track=stream.getVideoTracks()[0];
+  $('torch').hidden=!(track.getCapabilities&&track.getCapabilities().torch);
+  msg('Starting decoder…');try{await initDetector()}catch(e){stop('Could not load a barcode decoder.');return}
+  running=true;lastActive=performance.now();$('power').textContent='Stop camera';lock(true);tick();
+}
+function stop(m){
+  running=false;lock(false);if(stream)stream.getTracks().forEach(t=>t.stop());v.srcObject=null;torchOn=false;
+  ctx.clearRect(0,0,o.width,o.height);$('power').textContent='Enable camera';$('cap').disabled=true;msg(m||'Camera is off');
+}
+$('power').onclick=()=>running?stop():start();
+$('torch').onclick=()=>{torchOn=!torchOn;track.applyConstraints({advanced:[{torch:torchOn}]})};
+$('cap').onclick=()=>{if(cand)capture(cand)};
+document.addEventListener('pointerdown',()=>lastActive=performance.now());
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&running)stop('Camera paused while the app is in the background.')});
+let wl;
+async function lock(on){try{if(on)wl=await navigator.wakeLock.request('screen');else if(wl){wl.release();wl=null}}catch(e){}}
+
+/* ============================== handheld Bluetooth scanner (keyboard mode) ============================== */
+/* A scan is a fast burst of characters followed by Enter. Old labels: 11-13 digits. New labels: digits and ( ) ~ | (the scanner should send
+   the FNC1 separator as ~ or |). Box labels: BOX-... A burst that is not a recognised barcode is a read error. */
+let src='cam',scanTimer;const si=$('scan');
+const burstOk=b=>/^[0-9A-Za-z()~|\x1d-]{8,}$/.test(b);
+function scanDone(t){onScan(t)}
+let lastUi=Date.now();
+['pointerdown','keydown','input'].forEach(t=>addEventListener(t,()=>lastUi=Date.now(),true));
+function focusScan(){
+  if(src!=='bt'||modalOpen||!$('settings').hidden)return;
+  const a=document.activeElement,tag=a&&a!==si?a.tagName:'',idle=Date.now()-lastUi;
+  if((tag==='SELECT'&&idle<10000)||((tag==='INPUT'||tag==='TEXTAREA')&&idle<30000))return;
+  si.focus({preventScroll:true});
+}
+si.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();clearTimeout(scanTimer);const t=si.value;si.value='';if(t)scanDone(t)}});
+si.addEventListener('input',()=>{clearTimeout(scanTimer);scanTimer=setTimeout(()=>{const t=si.value;si.value='';if(t)scanBad(t,'The read was cut short. Scan again.')},700)});
+let kb='',kt=-1e9;
+addEventListener('keydown',e=>{
+  if(src!=='bt'||e.isComposing||modalOpen)return;
+  const now=performance.now();
+  $('dbg').textContent='Scanner readout: key '+e.key+' · burst '+kb.length+' chars · gap '+Math.round(now-kt)+' ms';
+  if(e.key==='Enter'){
+    const b=kb;kb='';
+    if(burstOk(b)){
+      e.preventDefault();e.stopImmediatePropagation();
+      const a=document.activeElement;
+      if(a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA')&&a.value.endsWith(b))a.value=a.value.slice(0,-b.length);
+      clearTimeout(scanTimer);scanDone(b);
+    }
+    return;
+  }
+  if(e.key.length===1){kb=(now-kt<250?kb:'')+e.key;kt=now}
+  else if(!['Shift','CapsLock','Alt','Control','Meta','AltGraph'].includes(e.key))kb='';
+},true);
+function setSrc(s){
+  src=s;localStorage.ecfbsrc=s;$('src').value=s;
+  if(s==='bt'&&running)stop();
+  document.querySelectorAll('.camonly').forEach(e=>e.hidden=s!=='cam');
+  $('btui').hidden=s!=='bt';si.value='';
+  if(s==='bt')focusScan();else si.blur();
+}
+$('src').onchange=e=>setSrc(e.target.value);
+addEventListener('change',e=>{if(e.target.tagName==='SELECT'&&src==='bt'){e.target.blur();setTimeout(focusScan,50)}});
+$('note').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('note').blur();setTimeout(focusScan,50)}});
+document.addEventListener('pointerdown',e=>{
+  if(src==='bt'&&!e.target.closest('input,select,textarea,label,button')){
+    const a=document.activeElement;if(a&&a!==si&&/^(SELECT|INPUT|TEXTAREA)$/.test(a.tagName))a.blur();setTimeout(focusScan,50)}
+});
+setInterval(focusScan,1000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)focusScan()});
+document.addEventListener('keydown',()=>{if(src==='bt')audio()});
+
+/* ============================== settings, install, start ============================== */
+function openSettings(){
+  $('s_dev').value=cfg.device||'';$('s_url').value=cfg.url||'';$('s_url').placeholder=DEFAULT_URL?'Leave blank to use the built-in address':'https://script.google.com/macros/s/.../exec';$('s_tok').value=cfg.token||'';
+  setStat('Build '+BUILD+(ref?' · data version '+ref.version+' · '+plist().length+' products':'')+' · '+queue.length+' waiting to send');
+  $('settings').hidden=false;
+}
+$('openset1').onclick=openSettings;$('rolebtn').onclick=showRoles;$('q').onclick=openSettings;
+$('s_close').onclick=()=>{$('settings').hidden=true;checkSetup();focusScan()};
+$('s_save').onclick=async()=>{
+  const dev=$('s_dev').value.trim(),url=$('s_url').value.trim(),tok=$('s_tok').value.trim();
+  if(!dev)return setStat('Give this phone a name first.');
+  cfg={device:dev,url:url||DEFAULT_URL,token:tok};SV('cfg',cfg);lastErr='';setStat('Connecting…');
+  if(url){await refresh(true);flush()}else setStat('Saved. Add the web app address to connect.');
+  checkSetup();
+};
+$('s_send').onclick=async()=>{await flush();setStat(queue.length?queue.length+' still waiting. '+(lastErr||'Check the connection.'):'All sent.')};
+$('s_clear').onclick=async()=>{if(await confirmD('Clear cached data?','<p>Products, stock and the pick list are downloaded again when you are online. Unsent scans ('+queue.length+') are kept.</p>','Clear')){ref=null;PM={};SV('ref',null);localStorage.removeItem('ecfb.localBoxes');showStatus();renderOpts();setStat('Cleared.')}};
+function checkSetup(){
+  const n=$('setupnote');
+  if(!cfg.device||!cfg.url||!cfg.token){n.hidden=false;n.innerHTML='This phone is not set up yet. <button class="sm go" id="setbtn">Open Settings</button>';$('setbtn').onclick=openSettings}
+  else if(!ref){n.hidden=false;n.textContent='No product data on this phone yet. It downloads when you are online.'}
+  else n.hidden=true;
+}
+function applyHashSetup(){   // https://.../index.html#setup&u=<web app address>&t=<token>&d=<device name>  (the part after # is never sent to a server)
+  if(!/^#setup/.test(location.hash))return;
+  const p=new URLSearchParams(location.hash.slice(1));
+  cfg={url:p.get('u')||cfg.url,token:p.get('t')||cfg.token,device:p.get('d')||cfg.device};SV('cfg',cfg);
+  history.replaceState(null,'',location.pathname+location.search);
+}
+let ip;
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();ip=e;$('install').hidden=false});
+addEventListener('appinstalled',()=>$('install').hidden=true);
+$('install').onclick=async()=>{ip.prompt();await ip.userChoice;$('install').hidden=true};
+if('serviceWorker' in navigator){const had=!!navigator.serviceWorker.controller;navigator.serviceWorker.register('sw.js');
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(had)$('upd').hidden=false})}
+$('upd').onclick=()=>location.reload();
+$('ver').textContent='Build '+BUILD+' (beta)';
+if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
+
+applyHashSetup();
+if(ref&&!sticky.origin)sticky.origin=(ref.settings||{}).defaultOrigin||'ECF';
+if(!sticky.origin)sticky.origin='ECF';
+showStatus();renderRecent();checkSetup();
+if(!cfg.device||!cfg.url){openSettings()}
+if(MODES[role])setRole(role);else showRoles();
+refresh();flush();
+</script>
+</body>
+</html>
