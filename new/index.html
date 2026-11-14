@@ -130,7 +130,7 @@ ul.list li .w{color:#b26a00;font-size:.8rem}
 
 <script>
 /* ============================== constants ============================== */
-const BUILD='vB0.1.1';
+const BUILD='vB0.1.3';
 const DEFAULT_URL='https://script.google.com/macros/s/AKfycbyx2IrRDLzrY4J_yH5TUdAi8QVsR4hpaZvZeYHevBeIUjIxjGNHkjU9S1_ooV4S2Yvn/exec';   // paste the Apps Script web app address (ending /exec) between the quotes and the phones need no setup for it   // keep in step with V in sw.js
 const ROLES=[
  {name:'Meat Packing',sub:'IN: put new packs into stock'},
@@ -184,7 +184,7 @@ async function refresh(manual){
     ref=j;ref.fetched=nowIso();SV('ref',ref);PM=prodMap();lastErr='';
     if(!sticky.origin&&S().defaultOrigin)sticky.origin=S().defaultOrigin;
     renderOpts();showStatus();if(manual)setStat('Connected to web app version '+j.version+'. '+plist().length+' products.');
-  }catch(e){if(manual)setStat('Could not reach the web app: '+e.message)}
+  }catch(e){if(manual)setStat('Could not reach the web app ('+e.message+'). Check: the address ends in /exec; the deployment\'s "Who has access" is Anyone; the phone has a connection. Test by opening the address with ?token=your-token on the end in the phone browser: it should show text starting {"ok":true.')}
   finally{refBusy=false;showStatus();checkSetup()}
 }
 function setStat(t){$('s_status').textContent=t}

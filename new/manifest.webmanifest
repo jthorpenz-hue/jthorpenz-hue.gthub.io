@@ -1,7 +1,8 @@
 {
  "name": "ECF scanner beta",
  "short_name": "ECF beta",
- "start_url": "./",
+ "id": "ecf-scanner-beta",
+ "start_url": "./?app=beta",
  "scope": "./",
  "display": "standalone",
  "orientation": "portrait",

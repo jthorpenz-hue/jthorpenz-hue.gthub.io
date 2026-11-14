@@ -1,5 +1,5 @@
 // Bump V whenever any app file changes so phones pick up the new version.
-const V='ecfb-v0.1.1',SHELL=['./','index.html','manifest.webmanifest','icon-192.png','icon-512.png'];
+const V='ecfb-v0.1.3',SHELL=['./','index.html','manifest.webmanifest','icon-192.png','icon-512.png'];
 const good=res=>res&&(res.ok||res.type==='opaque');   // never cache an error page
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>Promise.all(SHELL.map(u=>c.add(new Request(u,{cache:'reload'}))))).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==V).map(x=>caches.delete(x)))).then(()=>self.clients.claim()))});
